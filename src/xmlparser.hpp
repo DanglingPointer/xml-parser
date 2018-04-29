@@ -118,7 +118,7 @@ std::basic_string<TChar> ExtractName(const TChar *pbegin)
 {
    ++pbegin;
    const TChar *pend = pbegin;
-   while (IsAlpha(*pend)) {
+   while (!IsSpace(*pend) && *pend != (TChar)'>'){
       ++pend;
    }
    return std::basic_string<TChar>(pbegin, pend);
@@ -192,7 +192,7 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
    ++it_left;
 
    // Last pointer in 'tokens' points to \0
-   for (;it_right != tokens.cend() && tree.size() > 0; ++it_right, ++it_left) {
+   for (; it_right != tokens.cend() && tree.size() > 0; ++it_right, ++it_left) {
       const TChar *pbegin = *it_left;
       const TChar *pend = *it_right;
 
