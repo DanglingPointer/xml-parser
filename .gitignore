@@ -1,0 +1,5 @@
+out/
+*.sublime-workspace
+*.o
+*.so
+*.a
