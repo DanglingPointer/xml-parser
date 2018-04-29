@@ -118,7 +118,7 @@ std::basic_string<TChar> ExtractName(const TChar *pbegin)
 {
    ++pbegin;
    const TChar *pend = pbegin;
-   while (!IsSpace(*pend) && *pend != (TChar)'>'){
+   while (!IsSpace(*pend) && *pend != (TChar)'>') {
       ++pend;
    }
    return std::basic_string<TChar>(pbegin, pend);
@@ -161,6 +161,69 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
    return attrs;
 }
 
+
+template <typename TChar>
+inline const TChar **EntityRefTable(std::size_t index)
+{
+   static const TChar *table[][4] = {{L"&amp;", L"&#38", L"&#x26;", L"&"},
+                                     {L"&lt;", L"&#60;", L"&#x3C;", L"<"},
+                                     {L"&gt;", L"&#62;", L"&#x3E;", L">"},
+                                     {L"&quot;", L"&#34;", L"&#x22;", L"\""},
+                                     {L"&apos;", L"&#39;", L"&#x27;", L"\'"}};
+   return table[index];
+};
+template <>
+inline const char **EntityRefTable<char>(std::size_t index)
+{
+   static const char *table[][4] = {{"&amp;", "&#38", "&#x26;", "&"},
+                                    {"&lt;", "&#60;", "&#x3C;", "<"},
+                                    {"&gt;", "&#62;", "&#x3E;", ">"},
+                                    {"&quot;", "&#34;", "&#x22;", "\""},
+                                    {"&apos;", "&#39;", "&#x27;", "\'"}};
+   return table[index];
+};
+// returns pointer to substitution string, writes length of entity reference to count
+template <typename TChar>
+const TChar *IsEntityRef(const TChar *from, std::size_t *count, std::size_t er_index)
+{
+   const TChar **table_line = EntityRefTable<TChar>(er_index);
+   for (int i = 0; i < 3; ++i) {
+      const TChar *word = table_line[i];
+      const TChar *pit = from;
+      bool equal = true;
+      while (*word && *pit) {
+         if (*word++ != *pit++) {
+            equal = false;
+            break;
+         }
+      }
+      if (equal) {
+         *count = pit - from;
+         return table_line[3];
+      }
+   }
+   return nullptr;
+}
+template <typename TChar>
+void SubstituteEntityRef(std::basic_string<TChar> &content)
+{
+   if (content.empty()) return;
+
+   const TChar *from = &content.front();
+   size_t count = 0;
+
+   for (const TChar *from = &content.front(); from < &content.back(); ++from) {
+      for (int er_index = 0; er_index < 5; ++er_index) {
+         const TChar *replacement = IsEntityRef(from, &count, er_index);
+         if (replacement) {
+            std::size_t pos = from - &content.front();
+            content.replace(pos, count, replacement);
+            from = &content.front();
+         }
+      }
+   }
+}
+
 template <typename TChar>
 struct ElementData
 {
@@ -174,7 +237,7 @@ struct ElementData
 
 // 'tokens' must NOT include declaration element
 template <typename TChar>
-std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar *> &tokens)
+std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar *> &tokens, bool replace_er)
 {
    // Create stack and iterators
    std::stack<ElementData<TChar> *, std::list<ElementData<TChar> *>> tree;
@@ -215,6 +278,9 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
       if (what == Tag::CONTENT) {
          std::basic_string<TChar> content(pbegin, pend);
          tree.top()->content = std::move(content);
+         if (replace_er) {
+            SubstituteEntityRef(tree.top()->content);
+         }
          continue;
       }
       if (what == Tag::ERROR) {
@@ -328,7 +394,7 @@ public:
    typedef TChar char_t;
    typedef Document my_t;
 
-   explicit Document(const char_t *text)
+   explicit Document(const char_t *text, bool replace_er = true)
    {
       std::list<const char_t *> tokens = details::Tokenize(text);
       details::RemoveWhitespaces(&tokens);
@@ -355,7 +421,7 @@ public:
          }
          tokens.pop_front();
       }
-      proot_ = details::BuildElementTree(tokens);
+      proot_ = details::BuildElementTree(tokens, replace_er);
       if (!proot_) {
          throw Exception("Parsing failed");
       }

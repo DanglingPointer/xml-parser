@@ -16,10 +16,10 @@ const char *text =
       </batters>
       <topping id="5001">None</topping>
       <topping id="5002">Glazed</topping>
-      <topping id="5005">Sugar</topping>
-      <topping id="5006">Sprinkles</topping>
+      <topping id="5005">Su&#39;gar</topping>
+      <topping id="5006">&quot;Sprinkles&#x22;</topping>
       <topping id="5003">Chocolate</topping>
-      <nm:topping nm:id="5004">Maple</topping>
+      <nm:topping nm:id="5004">Maple&amp;Apple</topping>
    </item>
    <item id="0000" type="empty" />
 </items>
@@ -52,11 +52,11 @@ int main()
    try {
       auto start = std::chrono::system_clock::now();
 
-      xml::Document<char> doc(text);
+      xml::Document<char> doc(text, true);
       std::cout << doc;
 
       auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
-      std::cout << "Time: " << elapsed.count();
+      std::cout << "Time: " << elapsed.count() << std::endl;
    }
    catch (const xml::Exception &e) {
       std::cout << e.what() << std::endl;
