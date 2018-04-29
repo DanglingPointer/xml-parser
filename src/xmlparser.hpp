@@ -1,3 +1,4 @@
+#include <utility>
 #include <stack>
 #include <stdexcept>
 #include <unordered_map>
@@ -78,27 +79,35 @@ void RemoveWhitespaces(std::list<const TChar *> *tokens)
    }
 }
 
-enum class Tag
+enum Tag
 {
-   OPEN,
-   CLOSE,
-   CONTENT,
-   ERROR
+   OPEN = 0x01,
+   CLOSE = 0x02,
+   CONTENT = 0x04,
+   ERROR = 0x00
 };
 
 // pbegin and pend must be from the list tokenized list
 template <typename TChar>
-Tag DetermineTag(const TChar *pbegin, const TChar *pend)
+int DetermineTag(const TChar *pbegin, const TChar *pend)
 {
    if (*pbegin == (TChar)'<') {
-      if (*(pend - 1) != (TChar)'>') return Tag::ERROR;
-
-      if (*(pend - 1) == (TChar)'/') {
+      if (*(pbegin + 1) == (TChar)'/') {
          return Tag::CLOSE;
       }
-      else {
-         return Tag::OPEN;
+
+      while (pend > pbegin && *pend != (TChar)'>') {
+         --pend;
       }
+      if (*pend != (TChar)'>') {
+         return Tag::ERROR;
+      }
+
+      int what = Tag::OPEN;
+      if (*(pend - 1) == (TChar)'/') {
+         what |= Tag::CLOSE;
+      }
+      return what;
    }
    return Tag::CONTENT;
 }
@@ -107,11 +116,12 @@ Tag DetermineTag(const TChar *pbegin, const TChar *pend)
 template <typename TChar>
 std::basic_string<TChar> ExtractName(const TChar *pbegin)
 {
+   ++pbegin;
    const TChar *pend = pbegin;
    while (IsAlpha(*pend)) {
       ++pend;
    }
-   return std::basic_string<TChar>(pbegin + 1, pend);
+   return std::basic_string<TChar>(pbegin, pend);
 }
 
 // ptagbegin must point to '<', ptagend must point past '>'
@@ -138,7 +148,7 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
          valbegin = ++pit; // now pit and valbegin are past '\"'
          continue;
       }
-      if (*pit == (TChar)'\"' && valbegin != nullptr) {
+      if ((*pit == (TChar)'\"' || *pit == (TChar)'\'') && valbegin != nullptr) {
          valend = pit;
          // extract key and value:
          std::basic_string<TChar> key(keybegin, keyend);
@@ -154,7 +164,6 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
 template <typename TChar>
 struct ElementData
 {
-public:
    typedef TChar char_t;
 
    std::vector<std::unique_ptr<ElementData>> children;
@@ -183,43 +192,34 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
    ++it_left;
 
    // Last pointer in 'tokens' points to \0
-   while (it_right != tokens.cend() && tree.size() > 0) {
+   for (;it_right != tokens.cend() && tree.size() > 0; ++it_right, ++it_left) {
       const TChar *pbegin = *it_left;
       const TChar *pend = *it_right;
 
-      Tag what = DetermineTag(pbegin, pend);
-      switch (what) {
-         case Tag::CLOSE: {
-            // Might be either a true closing tag or a new "inlined" element
-            auto name = ExtractName(pbegin);
-            if (name == tree.top()->name) {
-               tree.pop();
-               break;
-            } // else goto Tag::OPEN
-         }
-         case Tag::OPEN: {
-            // Create and anchor a new element
-            ElementData<TChar> *pelem = new ElementData<TChar>();
-            tree.top()->children.emplace_back(pelem); // creates std::unique_ptr implicitly
+      int what = DetermineTag(pbegin, pend);
 
-            pelem->name = ExtractName(pbegin);
-            pelem->attrs = ExtractAttributes(pbegin, pend);
+      if (what & Tag::OPEN) {
+         // Create and anchor a new element
+         ElementData<TChar> *pelem = new ElementData<TChar>();
+         tree.top()->children.emplace_back(pelem); // creates std::unique_ptr implicitly
 
-            tree.push(pelem);
-            break;
-         }
-         case Tag::CONTENT: {
-            // Add content to the uppermost (current) element in the tree
-            std::basic_string<TChar> content(pbegin, pend);
-            tree.top()->content = std::move(content);
-            break;
-         }
-         case Tag::ERROR: {
-            return nullptr;
-         }
+         pelem->name = ExtractName(pbegin);
+         pelem->attrs = ExtractAttributes(pbegin, pend);
+
+         tree.push(pelem);
       }
-      ++it_right;
-      ++it_left;
+      if (what & Tag::CLOSE) {
+         tree.pop();
+         continue;
+      }
+      if (what == Tag::CONTENT) {
+         std::basic_string<TChar> content(pbegin, pend);
+         tree.top()->content = std::move(content);
+         continue;
+      }
+      if (what == Tag::ERROR) {
+         return nullptr;
+      }
    }
    return root;
 }
@@ -246,6 +246,10 @@ class Exception : std::logic_error
 public:
    Exception(const std::string &what) : std::logic_error(what)
    {}
+   virtual const char *what() const noexcept
+   {
+      return std::logic_error::what();
+   }
 };
 
 // wrapper for ElementData
@@ -277,16 +281,13 @@ public:
       }
       return it->second;
    }
+   const std::basic_string<char_t> &GetAttributeName(std::size_t index) const
+   {
+      return GetAttribute(index)->first;
+   }
    const std::basic_string<char_t> &GetAttributeValue(std::size_t index) const
    {
-      auto it = pdata_->attrs.cbegin();
-      for (std::size_t i = 0; i < index; ++i) {
-         if (it == pdata_->attrs.cend()) {
-            throw Exception("Attribute not found");
-         }
-         ++it;
-      }
-      return it->second;
+      return GetAttribute(index)->second;
    }
    std::size_t GetAttributeCount() const noexcept
    {
@@ -306,6 +307,17 @@ public:
    }
 
 private:
+   const std::pair<const std::basic_string<char_t>, std::basic_string<char_t>> *GetAttribute(std::size_t index) const
+   {
+      auto it = pdata_->attrs.cbegin();
+      for (std::size_t i = 0; i < index; ++i) {
+         if (it == pdata_->attrs.cend()) {
+            throw Exception("Attribute not found");
+         }
+         ++it;
+      }
+      return &(*it);
+   }
    details::ElementData<char_t> *pdata_;
 };
 
@@ -380,15 +392,13 @@ private:
 
 
 template <typename TChar>
-Document<TChar> ParseString(const TChar *text)
+inline Document<TChar> ParseString(const TChar *text)
 {
    return Document<TChar>(text);
 }
 
-using TChar = char;
-
-// template <typename TChar>
-Document<TChar> ParseString(const std::basic_string<TChar> &text)
+template <typename TChar>
+inline Document<TChar> ParseString(const std::basic_string<TChar> &text)
 {
    return Document<TChar>(text.c_str());
 }
