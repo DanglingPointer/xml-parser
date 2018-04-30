@@ -20,7 +20,8 @@ const char *text =
       <topping id="5004">Su&#39;gar</topping>
       <topping id="5005">&quot;Sprinkles&#x22;</topping>
       <topping id="5006">Chocolate</topping>
-      <topping></topping>
+      <!--<topping></topping> -->
+      <!-- blablabal-->
       <nm:topping nm:id="5007">Maple&amp;Apple</topping>
    </item>
    <item id="0000" type="empty" />
@@ -30,7 +31,7 @@ const char *text =
 template <typename TChar>
 std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml::Element<TChar> &e)
 {
-   out << "\nName: " << e.GetName() << "\nContent: " << e.GetContent() << "\nAttributes: ";
+   out << "\nName: " << e.GetName() << "\nChildCount: " << e.GetChildCount() << "\nContent: " << e.GetContent() << "\nAttributes: ";
    for (int i = 0; i < e.GetAttributeCount(); ++i) {
       out << e.GetAttributeName(i) << ":" << e.GetAttributeValue(i) << " ";
    }

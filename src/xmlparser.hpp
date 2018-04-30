@@ -79,6 +79,51 @@ void RemoveGaps(std::list<const TChar *> *tokens)
    }
 }
 
+template <typename TChar>
+inline bool IsCommentStart(const TChar *pit) noexcept
+{
+   return pit[0] == (TChar)'<' && pit[1] == (TChar)'!' && pit[2] == (TChar)'-' && pit[3] == (TChar)'-';
+}
+template <typename TChar>
+inline bool IsCommentEnd(const TChar *pit) noexcept
+{
+   return *pit == (TChar)'>' && *(pit - 1) == (TChar)'-' && *(pit - 2) == (TChar)'-';
+}
+
+template <typename TChar>
+void RemoveComments(std::list<const TChar *> *tokens)
+{
+   auto it_right = tokens->begin();
+   auto it_left  = it_right++;
+
+   while (it_right != tokens->end()) {
+      const TChar *pit  = *it_left;
+      const TChar *pend = *it_right;
+
+      if (IsCommentStart(pit)) {
+         bool comment_end = false;
+         do {
+            // Finding whether comment end lies between pit and pend
+            // Always decrement at least once since no tokens point to '>' as required by IsCommentEnd()
+            --pend;
+         } while (pend > (pit + 1) && !(comment_end = IsCommentEnd(pend)));
+
+         if (!comment_end) {
+            // it_right moves forward, it_left stays
+            ++it_right;
+         }
+         else {
+            tokens->erase(it_left, it_right);
+            it_left = it_right++;
+         }
+      }
+      else {
+         ++it_right;
+         ++it_left;
+      }
+   }
+}
+
 enum Tag
 {
    OPEN    = 0x01,
@@ -96,7 +141,7 @@ int DetermineTag(const TChar *pbegin, const TChar *pend)
          return Tag::CLOSE;
       }
 
-      while (pend > pbegin && *pend != (TChar)'>') {
+      while (pend > pbegin && (*pend != (TChar)'>' || IsCommentEnd(pend))) {
          --pend;
       }
       if (*pend != (TChar)'>') {
@@ -137,7 +182,7 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
    const TChar *keybegin, *keyend, *valbegin, *valend;
    keybegin = keyend = valbegin = valend = nullptr;
 
-   for (; pit < ptagend; ++pit) {
+   for (; pit < ptagend && *pit != (TChar)'>'; ++pit) {
       if (IsAlpha(*pit) && keybegin == nullptr) {
          keybegin = pit;
          continue;
@@ -161,7 +206,7 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
 }
 
 template <typename TChar>
-inline const TChar **EntityRefTable(std::size_t index) noexcept;
+const TChar **EntityRefTable(std::size_t index) noexcept;
 
 #define ENTITY_REF_TABLE(prefix, type)                                                                       \
    template <>                                                                                               \
@@ -298,7 +343,7 @@ std::basic_string<TChar> *GetDeclarationAttrs() noexcept;
 
 #define GET_DECLARATION_ATTRS(prefix, type)                                                                        \
    template <>                                                                                                     \
-   std::basic_string<type> *GetDeclarationAttrs<type>() noexcept                                                   \
+   inline std::basic_string<type> *GetDeclarationAttrs<type>() noexcept                                            \
    {                                                                                                               \
       static std::basic_string<type> decl_attrs[] = {prefix##"version", prefix##"encoding", prefix##"standalone"}; \
       return decl_attrs;                                                                                           \
@@ -422,6 +467,7 @@ public:
    {
       std::list<const char_t *> tokens = details::Tokenize(text);
       details::RemoveGaps(&tokens);
+      details::RemoveComments(&tokens);
 
       auto it_right = tokens.begin();
       auto it_left  = it_right++;

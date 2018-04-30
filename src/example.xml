@@ -1,19 +1,47 @@
-<?xml version="1.0" encoding="UTF-8"?>
-   <items>
-   <item id="0001" type="donut">
-      <name>Cake</name>
-      <ppu>0.55</ppu>
-      <batters>
-         <batter id="1001">Regular</batter>
-         <batter id="1002">Chocolate</batter>
-         <batter id="1003">Blueberry</batter>
-      </batters>
-      <topping id="5001">None</topping>
-      <topping id="5002">Glazed</topping>
-      <topping id="5005">Su&#39;gar</topping>
-      <topping id="5006">&quot;Sprinkles&#x22;</topping>
-      <topping id="5003">Chocolate</topping>
-      <nm:topping nm:id="5004">Maple&amp;Apple</topping>
-   </item>
-   <item/>
-</items>
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration>
+   <Settings>
+      <Common MinPoolSize="2" PoolSize="32" MaxDataSizeKb="4096" CheckHostIntervalMs="0" />
+      <!--                                                -->
+      <!-- ================== EXTERNAL ================== -->
+      <!-- .................. NR .................. -->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_NRHandler.xml" />-->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_AmApSrvConfig_NR.xml" />-->
+      <!-- .................. Commands .................. -->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_CommandsNRHandler.xml" />-->
+      <!--<Server Encryption="3" PortListener="9000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_CommandsNRHandler.xml" />-->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_AmApSrvConfig_Commands.xml" />-->
+      <!-- .................. Other .................. -->
+      <!--<Server Encryption="1" PortListener="9000" DllPath="GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_AppCtrlHandler.xml" />-->
+      <!--<Server Encryption="1" PortListener="9000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_GatewayHandler.xml" />-->
+      <!--<Server Encryption="1" PortListener="6000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_AppCtrlHandler.xml" />-->
+      <!--<Server Encryption="1" PortListener="9000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_AppCtrlHandler.xml" />-->
+      <!--<Server Encryption="1" PortListener="7000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_AmApSrvConfig_SimpleContent.xml" />-->
+      <!-- .................. OpFData .................. -->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_AmApSrvConfig_OpFData.xml" />-->
+      <!--<Server Encryption="3" PortListener="9000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_AmApSrvConfig_OpFData.xml" />-->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_GatewayHandler.xml" />-->
+      <!-- .................. JVM .................. -->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\GtwOuterHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" HostConfigFile="Host_JVMHandler.xml" />-->
+      <!--                                                -->
+      <!-- ================== INTERNAL ================== -->
+      <!-- .................. NR .................. -->
+      <Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\CommNRHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" OnWorkerStartEntryPoint="OnWorkerStart" OnWorkerStopEntryPoint="OnWorkerStop" />
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\AmApSrvr.GtwNetHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" Assembly="AmApSrvr.AMCommNRMessage" MainClass="AmApSrvr.AMCommNRMessageDm" ReloadOnExpired="true" />-->
+      <!--<Server Encryption="1" PortListener="7000" DllPath="D:\MyBin\AmApSrvr.GtwNetHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" Assembly="AmApSrvr.MoebiusCommander" MainClass="AmApSrvr.MoebiusCommander" ReloadOnExpired="true" />-->
+      <!-- .................. Commands .................. -->
+      <!--<Server Encryption="3" PortListener="9000" DllPath="D:\MyBin\CommandsNRHandler.dll" InitializeEntryPoint="InitCommandProcessor" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="UnloadCommandProcessor" />-->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\AmApSrvr.GtwNetHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" Assembly="AmApSrvr.Commands" MainClass="AmApSrvr.Commands" />-->
+      <!-- .................. Other .................. -->
+      <!--<Server Encryption="1" PortListener="9000" DllPath="AppCtrlHandler.dll" InitializeEntryPoint="InitAppCtrl" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="UnloadAppCtrl" />-->
+      <!--<Server Encryption="1" PortListener="9000" DllPath="D:\MyBin\MbsFirmwaresHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Unload" />-->
+      <!--<Server Encryption="1" PortListener="9000" DllPath="D:\MyBin\AppCtrlHandler.dll" InitializeEntryPoint="InitAppCtrl" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="UnloadAppCtrl" />-->
+      <!--<Server Encryption="1" PortListener="7000" DllPath="D:\MyBin\AmApSrvr.GtwNetHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" Assembly="AmApSrvr.SimpleContent" MainClass="AmApSrvr.SimpleContent" ReloadOnExpired="true" />-->
+      <!--<Server Encryption="1" PortListener="9000" DllPath="D:\MyBin\GatewayHandler.dll" InitializeEntryPoint="InitGtw" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" />-->
+      <!--<Server Encryption="1" PortListener="6000" DllPath="D:\MyBin\AppCtrlHandler.dll" InitializeEntryPoint="InitAppCtrl" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="UnloadAppCtrl" />-->
+      <!-- .................. OpFData .................. -->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\AmApSrvr.GtwNetHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" Assembly="AmApSrvr.OpFData" MainClass="OpFData.Engine" />-->
+      <!-- .................. JVM .................. -->
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\JVMHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" OnWorkerStartEntryPoint="OnWorkerStart" OnWorkerStopEntryPoint="OnWorkerStop" />-->
+   </Settings>
+</Configuration>
