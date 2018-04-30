@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
       std::cout << *doc;
 
       auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
-      std::cout << "Time: " << elapsed.count() << std::endl;
+      std::cout << "\nTime: " << elapsed.count() << "us\n";
    }
    catch (const xml::Exception &e) {
       std::cout << e.what() << std::endl;

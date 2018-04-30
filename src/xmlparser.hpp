@@ -50,7 +50,7 @@ std::list<const TChar *> Tokenize(const TChar *text)
       // add null-terminator
       tokens.emplace_back(pit);
    }
-   return std::move(tokens);
+   return tokens;
 }
 
 template <typename TChar>
@@ -93,29 +93,63 @@ inline bool IsCommentEnd(const TChar *pit) noexcept
 template <typename TChar>
 void RemoveComments(std::list<const TChar *> *tokens)
 {
+   // auto it_right = tokens->begin();
+   // auto it_left  = it_right++;
+
+   // while (it_right != tokens->end()) {
+   //    const TChar *pit  = *it_left;
+   //    const TChar *pend = *it_right;
+
+   //    if (IsCommentStart(pit)) {
+   //       bool comment_end = false;
+   //       do {
+   //          // Finding whether comment end lies between pit and pend
+   //          // Always decrement at least once since no tokens point to '>' as required by IsCommentEnd()
+   //          --pend;
+   //       } while (pend > (pit + 1) && !(comment_end = IsCommentEnd(pend)));
+
+   //       if (!comment_end) {
+   //          // it_right moves forward, it_left stays
+   //          ++it_right;
+   //       }
+   //       else {
+   //          tokens->erase(it_left, it_right);
+   //          it_left = it_right++;
+   //       }
+   //    }
+   //    else {
+   //       ++it_right;
+   //       ++it_left;
+   //    }
+   // }
+
+   // More efficient implementation:
    auto it_right = tokens->begin();
    auto it_left  = it_right++;
 
+   auto it_comment_from  = tokens->end();
+   auto it_comment_to    = tokens->end();
+
    while (it_right != tokens->end()) {
-      const TChar *pit  = *it_left;
-      const TChar *pend = *it_right;
-
-      if (IsCommentStart(pit)) {
-         bool comment_end = false;
-         do {
-            // Finding whether comment end lies between pit and pend
-            // Always decrement at least once since no tokens point to '>' as required by IsCommentEnd()
-            --pend;
-         } while (pend > (pit + 1) && !(comment_end = IsCommentEnd(pend)));
-
-         if (!comment_end) {
-            // it_right moves forward, it_left stays
-            ++it_right;
+         
+      const TChar *pend = *it_right;      
+      for (const TChar *pit  = *it_left; pit < pend; ++pit) {
+         if (it_comment_from == tokens->end() && IsCommentStart(pit)) {
+            it_comment_from = it_left;
+            pit += 3;
          }
-         else {
-            tokens->erase(it_left, it_right);
-            it_left = it_right++;
+         else if (it_comment_from != tokens->end() && IsCommentEnd(pit)) {
+            it_comment_to = it_right;
+            break;
          }
+      }
+      if (it_comment_from != tokens->end() && it_comment_to != tokens->end()) {
+         tokens->erase(it_comment_from, it_comment_to);         
+         it_right = it_comment_to;
+         it_left  = it_right++;
+
+         it_comment_from  = tokens->end();
+         it_comment_to    = tokens->end();
       }
       else {
          ++it_right;
@@ -132,29 +166,24 @@ enum Tag
    ERROR   = 0x00
 };
 
-// pbegin and pend must be from the list tokenized list
+// pbegin and pend must be from the tokens list
 template <typename TChar>
-int DetermineTag(const TChar *pbegin, const TChar *pend)
+int DetermineTag(const TChar *pbegin, const TChar *pend) noexcept
 {
    if (*pbegin == (TChar)'<') {
       if (*(pbegin + 1) == (TChar)'/') {
          return Tag::CLOSE;
       }
 
-      bool inside_comment = false;
-      while (pend > pbegin && (*pend != (TChar)'>' || inside_comment)) {
-         --pend;
-         if (IsCommentEnd(pend))
-            inside_comment = true;
-         else if (IsCommentStart(pend))
-            inside_comment = false;
+      while (pbegin < pend && *pbegin != (TChar)'>') {
+         ++pbegin;
       }
-      if (*pend != (TChar)'>') {
+      if (*pbegin != (TChar)'>') {
          return Tag::ERROR;
       }
 
       int what = Tag::OPEN;
-      if (*(pend - 1) == (TChar)'/')
+      if (*(pbegin - 1) == (TChar)'/')
          what |= Tag::CLOSE;
       return what;
    }
@@ -330,7 +359,8 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
       }
       if (what == Tag::CONTENT) {
          std::basic_string<TChar> content(pbegin, pend);
-         tree.top()->content = std::move(content);
+         // tree.top()->content = std::move(content);
+         tree.top()->content.append(content);
          if (replace_er) {
             SubstituteEntityRef(tree.top()->content);
          }

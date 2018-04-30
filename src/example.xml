@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Configuration>
    <Settings>
+      <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\AmApSrvr.GtwNetHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" Assembly="AmApSrvr.AMCommNRMessage" MainClass="AmApSrvr.AMCommNRMessageDm" ReloadOnExpired="true" />-->
       <Common MinPoolSize="2" PoolSize="32" MaxDataSizeKb="4096" CheckHostIntervalMs="0" />
+      <Test>Some content goes here <!-- nasty comment--> and there</Test>
       <!--                                                -->
       <!-- ================== EXTERNAL ================== -->
       <!-- .................. NR .................. -->
