@@ -141,8 +141,13 @@ int DetermineTag(const TChar *pbegin, const TChar *pend)
          return Tag::CLOSE;
       }
 
-      while (pend > pbegin && (*pend != (TChar)'>' || IsCommentEnd(pend))) {
+      bool inside_comment = false;
+      while (pend > pbegin && (*pend != (TChar)'>' || inside_comment)) {
          --pend;
+         if (IsCommentEnd(pend))
+            inside_comment = true;
+         else if (IsCommentStart(pend))
+            inside_comment = false;
       }
       if (*pend != (TChar)'>') {
          return Tag::ERROR;

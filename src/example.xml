@@ -26,7 +26,7 @@
       <!--                                                -->
       <!-- ================== INTERNAL ================== -->
       <!-- .................. NR .................. -->
-      <Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\CommNRHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" OnWorkerStartEntryPoint="OnWorkerStart" OnWorkerStopEntryPoint="OnWorkerStop" />
+      <Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\CommNRHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" OnWorkerStartEntryPoint="OnWorkerStart" OnWorkerStopEntryPoint="OnWorkerStop" >
       <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\AmApSrvr.GtwNetHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" Assembly="AmApSrvr.AMCommNRMessage" MainClass="AmApSrvr.AMCommNRMessageDm" ReloadOnExpired="true" />-->
       <!--<Server Encryption="1" PortListener="7000" DllPath="D:\MyBin\AmApSrvr.GtwNetHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" Assembly="AmApSrvr.MoebiusCommander" MainClass="AmApSrvr.MoebiusCommander" ReloadOnExpired="true" />-->
       <!-- .................. Commands .................. -->
@@ -43,5 +43,6 @@
       <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\AmApSrvr.GtwNetHandler.dll" InitializeEntryPoint="Initialize" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" Assembly="AmApSrvr.OpFData" MainClass="OpFData.Engine" />-->
       <!-- .................. JVM .................. -->
       <!--<Server Encryption="3" PortListener="7000" DllPath="D:\MyBin\JVMHandler.dll" InitializeEntryPoint="Prologue" ReceiveEntryPoint="Receive" ReceiveAndSendEntryPoint="ReceiveAndSend" EpilogueEntryPoint="Epilogue" OnWorkerStartEntryPoint="OnWorkerStart" OnWorkerStopEntryPoint="OnWorkerStop" />-->
+      </Server>
    </Settings>
 </Configuration>
