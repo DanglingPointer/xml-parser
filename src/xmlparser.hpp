@@ -7,33 +7,90 @@
 #include <memory>
 #include <istream>
 #include <cctype>
+#include <cwctype>
 #include <list>
 
 namespace xml {
 namespace details {
 
-template <typename TChar>
-inline bool IsSpace(TChar symbol)
-{
-   return std::iswspace(symbol);
-}
-template <>
-inline bool IsSpace<char>(char symbol)
-{
-   return std::isspace(static_cast<unsigned char>(symbol));
-}
+// Some helpers for resolving the correct standard library functions
 
 template <typename TChar>
-inline bool IsAlpha(TChar symbol)
-{
-   return std::iswalpha(symbol);
-}
-template <>
-inline bool IsAlpha<char>(char symbol)
-{
-   return std::isalpha(static_cast<unsigned char>(symbol));
-}
+bool IsSpace(TChar symbol);
 
+#define IS_SPACE(func, type)                           \
+   template <>                                         \
+   inline bool IsSpace<type>(type symbol)              \
+   {                                                   \
+      return func(static_cast<unsigned type>(symbol)); \
+   }
+
+IS_SPACE(std::isspace, char)
+IS_SPACE(std::iswspace, wchar_t)
+
+#undef IS_SPACE
+
+
+template <typename TChar>
+bool IsAlpha(TChar symbol);
+
+#define IS_ALPHA(func, type)                           \
+   template <>                                         \
+   inline bool IsAlpha<type>(type symbol)              \
+   {                                                   \
+      return func(static_cast<unsigned type>(symbol)); \
+   }
+
+IS_ALPHA(std::isalpha, char)
+IS_ALPHA(std::iswalpha, wchar_t)
+
+#undef IS_ALPHA
+
+// Tables for different encodings, mapping entity references to ascii symbols
+template <typename TChar>
+const TChar **EntityRefTable(std::size_t index) noexcept;
+
+#define ENTITY_REF_TABLE(prefix, type)                                                                       \
+   template <>                                                                                               \
+   inline const type **EntityRefTable<type>(std::size_t index) noexcept                                      \
+   {                                                                                                         \
+      static const type *table[][4] = {{prefix##"&amp;", prefix##"&#38;", prefix##"&#x26;", prefix##"&"},    \
+                                       {prefix##"&lt;", prefix##"&#60;", prefix##"&#x3C;", prefix##"<"},     \
+                                       {prefix##"&gt;", prefix##"&#62;", prefix##"&#x3E;", prefix##">"},     \
+                                       {prefix##"&quot;", prefix##"&#34;", prefix##"&#x22;", prefix##"\""},  \
+                                       {prefix##"&apos;", prefix##"&#39;", prefix##"&#x27;", prefix##"\'"}}; \
+      return table[index];                                                                                   \
+   }
+
+ENTITY_REF_TABLE(, char)
+ENTITY_REF_TABLE(L, wchar_t)
+ENTITY_REF_TABLE(u, char16_t)
+ENTITY_REF_TABLE(U, char32_t)
+
+#undef ENTITY_REF_TABLE
+
+// Keys of attributes in xml declaration, in different encodings
+template <typename TChar>
+std::basic_string<TChar> *GetDeclarationAttrs() noexcept;
+
+#define GET_DECLARATION_ATTRS(prefix, type)                                                                        \
+   template <>                                                                                                     \
+   inline std::basic_string<type> *GetDeclarationAttrs<type>() noexcept                                            \
+   {                                                                                                               \
+      static std::basic_string<type> decl_attrs[] = {prefix##"version", prefix##"encoding", prefix##"standalone"}; \
+      return decl_attrs;                                                                                           \
+   }
+
+GET_DECLARATION_ATTRS(, char)
+GET_DECLARATION_ATTRS(L, wchar_t)
+GET_DECLARATION_ATTRS(u, char16_t)
+GET_DECLARATION_ATTRS(U, char32_t)
+
+#undef GET_DECLARATION_ATTRS
+
+
+// Creates a list of pointers: each one pointing either to a '<' or behind a '>'.
+// Text between each pair of successive pointers is a token.
 template <typename TChar>
 std::list<const TChar *> Tokenize(const TChar *text)
 {
@@ -53,6 +110,7 @@ std::list<const TChar *> Tokenize(const TChar *text)
    return tokens;
 }
 
+// Removes pointers surrounding regions of whitespaces, so that no tokens consist entirely of whitespaces.
 template <typename TChar>
 void RemoveGaps(std::list<const TChar *> *tokens)
 {
@@ -79,6 +137,7 @@ void RemoveGaps(std::list<const TChar *> *tokens)
    }
 }
 
+// Detect comment start and end. Using strncmp was much slower!
 template <typename TChar>
 inline bool IsCommentStart(const TChar *pit) noexcept
 {
@@ -90,66 +149,36 @@ inline bool IsCommentEnd(const TChar *pit) noexcept
    return *pit == (TChar)'>' && *(pit - 1) == (TChar)'-' && *(pit - 2) == (TChar)'-';
 }
 
+// Erases pointers pointing to positions inside comments, so that each comment is exactly one token.
 template <typename TChar>
-void RemoveComments(std::list<const TChar *> *tokens)
+void RemoveInsideComments(std::list<const TChar *> *tokens)
 {
-   // auto it_right = tokens->begin();
-   // auto it_left  = it_right++;
-
-   // while (it_right != tokens->end()) {
-   //    const TChar *pit  = *it_left;
-   //    const TChar *pend = *it_right;
-
-   //    if (IsCommentStart(pit)) {
-   //       bool comment_end = false;
-   //       do {
-   //          // Finding whether comment end lies between pit and pend
-   //          // Always decrement at least once since no tokens point to '>' as required by IsCommentEnd()
-   //          --pend;
-   //       } while (pend > (pit + 1) && !(comment_end = IsCommentEnd(pend)));
-
-   //       if (!comment_end) {
-   //          // it_right moves forward, it_left stays
-   //          ++it_right;
-   //       }
-   //       else {
-   //          tokens->erase(it_left, it_right);
-   //          it_left = it_right++;
-   //       }
-   //    }
-   //    else {
-   //       ++it_right;
-   //       ++it_left;
-   //    }
-   // }
-
-   // More efficient implementation:
    auto it_right = tokens->begin();
    auto it_left  = it_right++;
 
-   auto it_comment_from  = tokens->end();
-   auto it_comment_to    = tokens->end();
+   auto it_erase_from = tokens->end();
+   auto it_erase_to   = tokens->end();
 
    while (it_right != tokens->end()) {
-         
-      const TChar *pend = *it_right;      
-      for (const TChar *pit  = *it_left; pit < pend; ++pit) {
-         if (it_comment_from == tokens->end() && IsCommentStart(pit)) {
-            it_comment_from = it_left;
-            pit += 3;
+
+      const TChar *pend = *it_right;
+      for (const TChar *pit = *it_left; pit < pend; ++pit) {
+         if (it_erase_from == tokens->end() && IsCommentStart(pit)) {
+            it_erase_from = it_right; // erase next token
+            pit += 3;                 // IsCommentStart() checks next 3 symbols
          }
-         else if (it_comment_from != tokens->end() && IsCommentEnd(pit)) {
-            it_comment_to = it_right;
+         else if (it_erase_from != tokens->end() && IsCommentEnd(pit)) {
+            it_erase_to = it_right; // erase untill (but not inclusive) next token
             break;
          }
       }
-      if (it_comment_from != tokens->end() && it_comment_to != tokens->end()) {
-         tokens->erase(it_comment_from, it_comment_to);         
-         it_right = it_comment_to;
+      if (it_erase_from != tokens->end() && it_erase_to != tokens->end()) {
+         tokens->erase(it_erase_from, it_erase_to); // no-op if it_erase_from==it_erase_to i.e. if there are no tokens inside comment
+         it_right = it_erase_to;
          it_left  = it_right++;
 
-         it_comment_from  = tokens->end();
-         it_comment_to    = tokens->end();
+         it_erase_from = tokens->end();
+         it_erase_to   = tokens->end();
       }
       else {
          ++it_right;
@@ -158,39 +187,45 @@ void RemoveComments(std::list<const TChar *> *tokens)
    }
 }
 
-enum Tag
+enum Token
 {
-   OPEN    = 0x01,
-   CLOSE   = 0x02,
-   CONTENT = 0x04,
+   OPEN    = 0x01, // opening xml tag
+   CLOSE   = 0x02, // closing xml tag
+   CONTENT = 0x04, // free text between opening and closing tags
+   COMMENT = 0x08, // everything inside <!--  -->
    ERROR   = 0x00
 };
 
-// pbegin and pend must be from the tokens list
+// Determines type of the token whose first symbol is *pbegin and last symbol is *(pend-1).
 template <typename TChar>
-int DetermineTag(const TChar *pbegin, const TChar *pend) noexcept
+int DetermineToken(const TChar *pbegin, const TChar *pend) noexcept
 {
    if (*pbegin == (TChar)'<') {
+
       if (*(pbegin + 1) == (TChar)'/') {
-         return Tag::CLOSE;
+         return Token::CLOSE;
+      }
+      if (IsCommentStart(pbegin)) {
+         return Token::COMMENT;
       }
 
+      // roll forward till we reach closing symbol '>'
       while (pbegin < pend && *pbegin != (TChar)'>') {
          ++pbegin;
       }
       if (*pbegin != (TChar)'>') {
-         return Tag::ERROR;
+         return Token::ERROR;
       }
 
-      int what = Tag::OPEN;
+      int what = Token::OPEN;
       if (*(pbegin - 1) == (TChar)'/')
-         what |= Tag::CLOSE;
+         what |= Token::CLOSE;
       return what;
    }
-   return Tag::CONTENT;
+   return Token::CONTENT;
 }
 
-// pbegin must point to '<'
+// Reads element name from the opening tag starting at pbegin (it must point to a '<').
 template <typename TChar>
 std::basic_string<TChar> ExtractName(const TChar *pbegin)
 {
@@ -202,13 +237,13 @@ std::basic_string<TChar> ExtractName(const TChar *pbegin)
    return std::basic_string<TChar>(pbegin, pend);
 }
 
-// ptagbegin must point to '<', ptagend must point past '>'
+// Reads attribute pairs from the tag starting at pbegin (it must point to a '<').
 template <typename TChar>
-std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAttributes(const TChar *ptagbegin, const TChar *ptagend)
+std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAttributes(const TChar *pbegin)
 {
-   const TChar *pit = ptagbegin;
+   const TChar *pit = pbegin;
    // skip element name
-   while (!IsSpace(*pit)) {
+   while (!IsSpace(*pit) && *pit != (TChar)'>') {
       ++pit;
    }
    std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> attrs;
@@ -216,14 +251,14 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
    const TChar *keybegin, *keyend, *valbegin, *valend;
    keybegin = keyend = valbegin = valend = nullptr;
 
-   for (; pit < ptagend && *pit != (TChar)'>'; ++pit) {
+   for (; *pit != (TChar)'>'; ++pit) {
       if (IsAlpha(*pit) && keybegin == nullptr) {
          keybegin = pit;
          continue;
       }
       if (*pit == (TChar)'=') {
-         keyend   = pit++; // now *keyend=='=' and *pit=='\"'
-         valbegin = ++pit; // now pit and valbegin are past '\"'
+         keyend   = pit++;     // now *keyend=='=' and *pit=='\"'
+         valbegin = (pit + 1); // now valbegin is behind the left '\"', pit will be there at the end of the iteration
          continue;
       }
       if ((*pit == (TChar)'\"' || *pit == (TChar)'\'') && valbegin != nullptr) {
@@ -239,38 +274,18 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
    return attrs;
 }
 
-template <typename TChar>
-const TChar **EntityRefTable(std::size_t index) noexcept;
-
-#define ENTITY_REF_TABLE(prefix, type)                                                                       \
-   template <>                                                                                               \
-   inline const type **EntityRefTable<type>(std::size_t index) noexcept                                      \
-   {                                                                                                         \
-      static const type *table[][4] = {{prefix##"&amp;", prefix##"&#38", prefix##"&#x26;", prefix##"&"},     \
-                                       {prefix##"&lt;", prefix##"&#60;", prefix##"&#x3C;", prefix##"<"},     \
-                                       {prefix##"&gt;", prefix##"&#62;", prefix##"&#x3E;", prefix##">"},     \
-                                       {prefix##"&quot;", prefix##"&#34;", prefix##"&#x22;", prefix##"\""},  \
-                                       {prefix##"&apos;", prefix##"&#39;", prefix##"&#x27;", prefix##"\'"}}; \
-      return table[index];                                                                                   \
-   }
-
-ENTITY_REF_TABLE(, char)
-ENTITY_REF_TABLE(L, wchar_t)
-ENTITY_REF_TABLE(u, char16_t)
-ENTITY_REF_TABLE(U, char32_t)
-
-#undef ENTITY_REF_TABLE
-
-
-// returns pointer to substitution string, writes length of entity reference to count
+// Checks whether from points to start of an entity reference. If so, returns a pointer to the substitution string
+// and writes the length of the entity reference to count. Returns nullptr if no entity reference at from.
 template <typename TChar>
 const TChar *IsEntityRef(const TChar *from, std::size_t *count, std::size_t er_index)
 {
    const TChar **table_line = EntityRefTable<TChar>(er_index);
    for (int i = 0; i < 3; ++i) {
+      // Compare with all 3 representations
       const TChar *word = table_line[i];
       const TChar *pit  = from;
-      bool equal        = true;
+
+      bool equal = true;
       while (*word && *pit) {
          if (*word++ != *pit++) {
             equal = false;
@@ -285,27 +300,28 @@ const TChar *IsEntityRef(const TChar *from, std::size_t *count, std::size_t er_i
    return nullptr;
 }
 
+// Replaces all entity references in 'content' by the corresponding ascii symbols.
 template <typename TChar>
 void SubstituteEntityRef(std::basic_string<TChar> &content)
 {
-   if (content.empty())
+   if (content.empty()) {
       return;
-
-   const TChar *from = &content.front();
-   size_t count      = 0;
-
+   }
+   size_t count = 0;
    for (const TChar *from = &content.front(); from < &content.back(); ++from) {
+      // Compare 'from' with all 5 entity references
       for (int er_index = 0; er_index < 5; ++er_index) {
          const TChar *replacement = IsEntityRef(from, &count, er_index);
          if (replacement) {
             std::size_t pos = from - &content.front();
-            content.replace(pos, count, replacement);
+            content.replace(pos, count, replacement); // no better overload :(
             from = &content.front();
          }
       }
    }
 }
 
+// Node in the resulting tree. Contains all data about one xml element and pointers to its children.
 template <typename TChar>
 struct ElementData
 {
@@ -317,7 +333,8 @@ struct ElementData
    std::basic_string<char_t> content;
 };
 
-// 'tokens' must NOT include declaration element
+// Builds the element tree and returns pointer to its root. Declaration token must be removed from
+// 'tokens' prior to calling this function. Ignores the rest after the root element has been closed.
 template <typename TChar>
 std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar *> &tokens, bool replace_er)
 {
@@ -330,67 +347,47 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
    // Set up root and push on stack
    auto root   = std::make_unique<ElementData<TChar>>();
    root->name  = ExtractName(*it_left);
-   root->attrs = ExtractAttributes(*it_left, *it_right);
+   root->attrs = ExtractAttributes(*it_left);
    tree.push(root.get());
 
    ++it_right;
    ++it_left;
 
-   // Last pointer in 'tokens' points to \0
+   // Last pointer in 'tokens' points to \0 so checking it_right instead of it_left
    for (; it_right != tokens.cend() && tree.size() > 0; ++it_right, ++it_left) {
       const TChar *pbegin = *it_left;
       const TChar *pend   = *it_right;
 
-      int what = DetermineTag(pbegin, pend);
+      int what = DetermineToken(pbegin, pend);
 
-      if (what & Tag::OPEN) {
+      if (what & Token::OPEN) {
          // Create and anchor a new element
          ElementData<TChar> *pelem = new ElementData<TChar>();
          tree.top()->children.emplace_back(pelem); // creates std::unique_ptr implicitly
 
          pelem->name  = ExtractName(pbegin);
-         pelem->attrs = ExtractAttributes(pbegin, pend);
+         pelem->attrs = ExtractAttributes(pbegin);
 
          tree.push(pelem);
       }
-      if (what & Tag::CLOSE) {
+      if (what & Token::CLOSE) {
          tree.pop();
          continue;
       }
-      if (what == Tag::CONTENT) {
-         std::basic_string<TChar> content(pbegin, pend);
-         // tree.top()->content = std::move(content);
-         tree.top()->content.append(content);
+      if (what == Token::CONTENT) {
+         tree.top()->content.append(pbegin, pend);
          if (replace_er) {
             SubstituteEntityRef(tree.top()->content);
          }
          continue;
       }
-      if (what == Tag::ERROR) {
+      if (what == Token::ERROR) {
          return nullptr;
       }
+      // if (what == Token::COMMENT) continue;
    }
    return root;
 }
-
-template <typename TChar>
-std::basic_string<TChar> *GetDeclarationAttrs() noexcept;
-
-#define GET_DECLARATION_ATTRS(prefix, type)                                                                        \
-   template <>                                                                                                     \
-   inline std::basic_string<type> *GetDeclarationAttrs<type>() noexcept                                            \
-   {                                                                                                               \
-      static std::basic_string<type> decl_attrs[] = {prefix##"version", prefix##"encoding", prefix##"standalone"}; \
-      return decl_attrs;                                                                                           \
-   }
-
-GET_DECLARATION_ATTRS(, char)
-GET_DECLARATION_ATTRS(L, wchar_t)
-GET_DECLARATION_ATTRS(u, char16_t)
-GET_DECLARATION_ATTRS(U, char32_t)
-
-#undef GET_DECLARATION_ATTRS
-
 
 } // namespace details
 
@@ -406,12 +403,14 @@ public:
    }
 };
 
-// wrapper for ElementData
+// Wrapper containing pointer to a node in the element tree, and defining user interface functions
+// to access the parsed data. Move is a shallow copy, deep copy unavailable.
 template <typename TChar>
 class Element
 {
 public:
    typedef TChar char_t;
+   typedef Element<char_t> my_t;
 
    Element(details::ElementData<char_t> *pdata) : pdata_(pdata)
    {
@@ -419,10 +418,17 @@ public:
          throw Exception("Failded to create element");
       }
    }
+   Element(my_t &&) = default;
+   my_t &operator=(my_t &&) = default;
+
+   Element(const my_t &) = delete;
+   my_t &operator=(const my_t &) = delete;
+
    const std::basic_string<char_t> &GetName() const noexcept
    {
       return pdata_->name;
    }
+   // Namespace name or empty.
    std::basic_string<char_t> GetNamePrefix() const
    {
       size_t pos = pdata_->name.find_first_of((char_t)':');
@@ -431,6 +437,7 @@ public:
       }
       return "";
    }
+   // Copy of the whole name if no namespace prefix.
    std::basic_string<char_t> GetNamePostfix() const
    {
       size_t pos = pdata_->name.find_first_of((char_t)':');
@@ -467,6 +474,7 @@ public:
    {
       return pdata_->children.size();
    }
+   // Creates wrapper for a child element and returns it.
    Element<char_t> GetChild(std::size_t index) const
    {
       if (index >= pdata_->children.size()) {
@@ -491,6 +499,7 @@ private:
    details::ElementData<char_t> *pdata_;
 };
 
+// Represents the whole xml document with or without declaration and one element tree.
 template <typename TChar>
 class Document
 {
@@ -502,7 +511,7 @@ public:
    {
       std::list<const char_t *> tokens = details::Tokenize(text);
       details::RemoveGaps(&tokens);
-      details::RemoveComments(&tokens);
+      details::RemoveInsideComments(&tokens);
 
       auto it_right = tokens.begin();
       auto it_left  = it_right++;
@@ -513,7 +522,7 @@ public:
          throw Exception("Malformed beginning");
       }
       if (*(pfirst + 1) == (char_t)'?') { // has declaration
-         auto declaration = details::ExtractAttributes(*it_left, *it_right);
+         auto declaration = details::ExtractAttributes(*it_left);
 
          std::basic_string<char_t> *decl_attrs  = details::GetDeclarationAttrs<char_t>();
          std::basic_string<char_t> *decl_data[] = {&version_, &encoding_, &standalone_};
@@ -561,19 +570,24 @@ private:
    std::basic_string<char_t> standalone_;
 };
 
-
+// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the process, 
+// set entity_references to 'false' if that is undesirable.
 template <typename TChar>
 inline std::unique_ptr<Document<TChar>> ParseString(const TChar *text, bool entity_references = true)
 {
    return std::make_unique<Document<TChar>>(text, entity_references);
 }
 
+// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the process, 
+// set entity_references to 'false' if that is undesirable.
 template <typename TChar>
 inline std::unique_ptr<Document<TChar>> ParseString(const std::basic_string<TChar> &text, bool entity_references = true)
 {
    return std::make_unique<Document<TChar>>(text.c_str(), entity_references);
 }
 
+// Reads data from 'stream' into cache and parses it into an xml::Document. Lower performance than the other
+// overloads. Parsing entity references might slow down the process, set entity_references to 'false' if that is undesirable.
 template <typename TChar>
 std::unique_ptr<Document<TChar>> ParseStream(std::basic_istream<TChar> &stream, bool entity_references = true)
 {

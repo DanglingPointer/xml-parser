@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 
       if (argc > 1) {
          std::ifstream file(argv[1]);
-         doc = xml::ParseStream(file);
+         doc = xml::ParseStream(file, true);
       }
       else {
          doc = xml::ParseString(text);
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
       std::cout << *doc;
 
       auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
-      std::cout << "\nTime: " << elapsed.count() << "us\n";
+      std::cout << "\nTime: " << elapsed.count() << "us (including reading file)\n";
    }
    catch (const xml::Exception &e) {
       std::cout << e.what() << std::endl;

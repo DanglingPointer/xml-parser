@@ -2,6 +2,6 @@
 
 mkdir -vp ../out
 
-clang++ tests.cpp -std=c++14 -O3 -o ../out/tests.out
+clang++ tests.cpp -std=c++14 -O2 -o ../out/tests.out
 
 ../out/tests.out example.xml
