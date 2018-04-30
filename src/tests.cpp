@@ -1,4 +1,4 @@
-#include <string>
+#include <fstream>
 #include <iostream>
 #include <chrono>
 #include "xmlparser.hpp"
@@ -15,45 +15,53 @@ const char *text =
          <batter id="1003">Blueberry</batter>
       </batters>
       <topping id="5001">None</topping>
-      <topping id="5002">Glazed</topping>
-      <topping id="5005">Su&#39;gar</topping>
-      <topping id="5006">&quot;Sprinkles&#x22;</topping>
-      <topping id="5003">Chocolate</topping>
-      <nm:topping nm:id="5004">Maple&amp;Apple</topping>
+      <topping id="5002"/>
+      <topping id="5003" />
+      <topping id="5004">Su&#39;gar</topping>
+      <topping id="5005">&quot;Sprinkles&#x22;</topping>
+      <topping id="5006">Chocolate</topping>
+      <topping></topping>
+      <nm:topping nm:id="5007">Maple&amp;Apple</topping>
    </item>
    <item id="0000" type="empty" />
 </items>
 )";
 
-// using TChar = char;
 template <typename TChar>
-std::ostream &operator<<(std::ostream &out, const xml::Element<TChar> &e)
+std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml::Element<TChar> &e)
 {
-   out << "Name: " << e.GetName() << ", Content: " << e.GetContent() << ", Attributes: ";
+   out << "\nName: " << e.GetName() << "\nContent: " << e.GetContent() << "\nAttributes: ";
    for (int i = 0; i < e.GetAttributeCount(); ++i) {
       out << e.GetAttributeName(i) << ":" << e.GetAttributeValue(i) << " ";
    }
-   out << "\n{\n";
-   for (int i = 0; i < e.GetChildrenCount(); ++i) {
+   out << "\nName prefix: " << e.GetNamePrefix() << "\nName postfix: " << e.GetNamePostfix() << "\n{\n";
+   for (int i = 0; i < e.GetChildCount(); ++i) {
       out << e.GetChild(i) << std::endl;
    }
-   return out << "}\n";
+   return out << "} // " << e.GetName() << "\n";
 }
 
 template <typename TChar>
-std::ostream &operator<<(std::ostream &out, const xml::Document<TChar> &doc)
+std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml::Document<TChar> &doc)
 {
    out << "Encoding = " << doc.GetEncoding() << ", Version = " << doc.GetVersion() << ", Standalone = " << doc.GetStandalone() << std::endl;
    return out << doc.GetRoot() << std::endl;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+   std::unique_ptr<xml::Document<char>> doc;
    try {
       auto start = std::chrono::system_clock::now();
 
-      xml::Document<char> doc(text, true);
-      std::cout << doc;
+      if (argc > 1) {
+         std::ifstream file(argv[1]);
+         doc = xml::ParseStream(file);
+      }
+      else {
+         doc = xml::ParseString(text);
+      }
+      std::cout << *doc;
 
       auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
       std::cout << "Time: " << elapsed.count() << std::endl;

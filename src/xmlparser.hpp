@@ -54,15 +54,15 @@ std::list<const TChar *> Tokenize(const TChar *text)
 }
 
 template <typename TChar>
-void RemoveWhitespaces(std::list<const TChar *> *tokens)
+void RemoveGaps(std::list<const TChar *> *tokens)
 {
    auto it_right = tokens->begin();
-   auto it_left = it_right++;
+   auto it_left  = it_right++;
 
    while (it_right != tokens->end()) {
-      const TChar *pit = *it_left;
+      const TChar *pit  = *it_left;
       const TChar *pend = *it_right;
-      bool whitespaces = true;
+      bool whitespaces  = true;
       for (; pit < pend; ++pit) {
          if (!IsSpace(*pit)) {
             whitespaces = false;
@@ -81,10 +81,10 @@ void RemoveWhitespaces(std::list<const TChar *> *tokens)
 
 enum Tag
 {
-   OPEN = 0x01,
-   CLOSE = 0x02,
+   OPEN    = 0x01,
+   CLOSE   = 0x02,
    CONTENT = 0x04,
-   ERROR = 0x00
+   ERROR   = 0x00
 };
 
 // pbegin and pend must be from the list tokenized list
@@ -104,9 +104,8 @@ int DetermineTag(const TChar *pbegin, const TChar *pend)
       }
 
       int what = Tag::OPEN;
-      if (*(pend - 1) == (TChar)'/') {
+      if (*(pend - 1) == (TChar)'/')
          what |= Tag::CLOSE;
-      }
       return what;
    }
    return Tag::CONTENT;
@@ -118,7 +117,7 @@ std::basic_string<TChar> ExtractName(const TChar *pbegin)
 {
    ++pbegin;
    const TChar *pend = pbegin;
-   while (!IsSpace(*pend) && *pend != (TChar)'>') {
+   while (!IsSpace(*pend) && *pend != (TChar)'>' && *pend != (TChar)'/') {
       ++pend;
    }
    return std::basic_string<TChar>(pbegin, pend);
@@ -144,7 +143,7 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
          continue;
       }
       if (*pit == (TChar)'=') {
-         keyend = pit++;   // now *keyend=='=' and *pit=='\"'
+         keyend   = pit++; // now *keyend=='=' and *pit=='\"'
          valbegin = ++pit; // now pit and valbegin are past '\"'
          continue;
       }
@@ -161,27 +160,29 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
    return attrs;
 }
 
-
 template <typename TChar>
-inline const TChar **EntityRefTable(std::size_t index)
-{
-   static const TChar *table[][4] = {{L"&amp;", L"&#38", L"&#x26;", L"&"},
-                                     {L"&lt;", L"&#60;", L"&#x3C;", L"<"},
-                                     {L"&gt;", L"&#62;", L"&#x3E;", L">"},
-                                     {L"&quot;", L"&#34;", L"&#x22;", L"\""},
-                                     {L"&apos;", L"&#39;", L"&#x27;", L"\'"}};
-   return table[index];
-};
-template <>
-inline const char **EntityRefTable<char>(std::size_t index)
-{
-   static const char *table[][4] = {{"&amp;", "&#38", "&#x26;", "&"},
-                                    {"&lt;", "&#60;", "&#x3C;", "<"},
-                                    {"&gt;", "&#62;", "&#x3E;", ">"},
-                                    {"&quot;", "&#34;", "&#x22;", "\""},
-                                    {"&apos;", "&#39;", "&#x27;", "\'"}};
-   return table[index];
-};
+inline const TChar **EntityRefTable(std::size_t index) noexcept;
+
+#define ENTITY_REF_TABLE(prefix, type)                                                                       \
+   template <>                                                                                               \
+   inline const type **EntityRefTable<type>(std::size_t index) noexcept                                      \
+   {                                                                                                         \
+      static const type *table[][4] = {{prefix##"&amp;", prefix##"&#38", prefix##"&#x26;", prefix##"&"},     \
+                                       {prefix##"&lt;", prefix##"&#60;", prefix##"&#x3C;", prefix##"<"},     \
+                                       {prefix##"&gt;", prefix##"&#62;", prefix##"&#x3E;", prefix##">"},     \
+                                       {prefix##"&quot;", prefix##"&#34;", prefix##"&#x22;", prefix##"\""},  \
+                                       {prefix##"&apos;", prefix##"&#39;", prefix##"&#x27;", prefix##"\'"}}; \
+      return table[index];                                                                                   \
+   }
+
+ENTITY_REF_TABLE(, char)
+ENTITY_REF_TABLE(L, wchar_t)
+ENTITY_REF_TABLE(u, char16_t)
+ENTITY_REF_TABLE(U, char32_t)
+
+#undef ENTITY_REF_TABLE
+
+
 // returns pointer to substitution string, writes length of entity reference to count
 template <typename TChar>
 const TChar *IsEntityRef(const TChar *from, std::size_t *count, std::size_t er_index)
@@ -189,8 +190,8 @@ const TChar *IsEntityRef(const TChar *from, std::size_t *count, std::size_t er_i
    const TChar **table_line = EntityRefTable<TChar>(er_index);
    for (int i = 0; i < 3; ++i) {
       const TChar *word = table_line[i];
-      const TChar *pit = from;
-      bool equal = true;
+      const TChar *pit  = from;
+      bool equal        = true;
       while (*word && *pit) {
          if (*word++ != *pit++) {
             equal = false;
@@ -204,13 +205,15 @@ const TChar *IsEntityRef(const TChar *from, std::size_t *count, std::size_t er_i
    }
    return nullptr;
 }
+
 template <typename TChar>
 void SubstituteEntityRef(std::basic_string<TChar> &content)
 {
-   if (content.empty()) return;
+   if (content.empty())
+      return;
 
    const TChar *from = &content.front();
-   size_t count = 0;
+   size_t count      = 0;
 
    for (const TChar *from = &content.front(); from < &content.back(); ++from) {
       for (int er_index = 0; er_index < 5; ++er_index) {
@@ -243,11 +246,11 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
    std::stack<ElementData<TChar> *, std::list<ElementData<TChar> *>> tree;
 
    auto it_right = tokens.begin();
-   auto it_left = it_right++;
+   auto it_left  = it_right++;
 
    // Set up root and push on stack
-   auto root = std::make_unique<ElementData<TChar>>();
-   root->name = ExtractName(*it_left);
+   auto root   = std::make_unique<ElementData<TChar>>();
+   root->name  = ExtractName(*it_left);
    root->attrs = ExtractAttributes(*it_left, *it_right);
    tree.push(root.get());
 
@@ -257,7 +260,7 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
    // Last pointer in 'tokens' points to \0
    for (; it_right != tokens.cend() && tree.size() > 0; ++it_right, ++it_left) {
       const TChar *pbegin = *it_left;
-      const TChar *pend = *it_right;
+      const TChar *pend   = *it_right;
 
       int what = DetermineTag(pbegin, pend);
 
@@ -266,7 +269,7 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
          ElementData<TChar> *pelem = new ElementData<TChar>();
          tree.top()->children.emplace_back(pelem); // creates std::unique_ptr implicitly
 
-         pelem->name = ExtractName(pbegin);
+         pelem->name  = ExtractName(pbegin);
          pelem->attrs = ExtractAttributes(pbegin, pend);
 
          tree.push(pelem);
@@ -291,17 +294,22 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
 }
 
 template <typename TChar>
-std::basic_string<TChar> *GetDeclarationAttrs() noexcept
-{
-   static std::basic_string<TChar> decl_attrs[] = {L"version", L"encoding", L"standalone"};
-   return decl_attrs;
-}
-template <>
-std::basic_string<char> *GetDeclarationAttrs<char>() noexcept
-{
-   static std::basic_string<char> decl_attrs[] = {"version", "encoding", "standalone"};
-   return decl_attrs;
-}
+std::basic_string<TChar> *GetDeclarationAttrs() noexcept;
+
+#define GET_DECLARATION_ATTRS(prefix, type)                                                                        \
+   template <>                                                                                                     \
+   std::basic_string<type> *GetDeclarationAttrs<type>() noexcept                                                   \
+   {                                                                                                               \
+      static std::basic_string<type> decl_attrs[] = {prefix##"version", prefix##"encoding", prefix##"standalone"}; \
+      return decl_attrs;                                                                                           \
+   }
+
+GET_DECLARATION_ATTRS(, char)
+GET_DECLARATION_ATTRS(L, wchar_t)
+GET_DECLARATION_ATTRS(u, char16_t)
+GET_DECLARATION_ATTRS(U, char32_t)
+
+#undef GET_DECLARATION_ATTRS
 
 
 } // namespace details
@@ -335,6 +343,22 @@ public:
    {
       return pdata_->name;
    }
+   std::basic_string<char_t> GetNamePrefix() const
+   {
+      size_t pos = pdata_->name.find_first_of((char_t)':');
+      if (pos != pdata_->name.npos) {
+         return pdata_->name.substr(0, pos);
+      }
+      return "";
+   }
+   std::basic_string<char_t> GetNamePostfix() const
+   {
+      size_t pos = pdata_->name.find_first_of((char_t)':');
+      if (pos != pdata_->name.npos) {
+         return pdata_->name.substr(pos + 1);
+      }
+      return pdata_->name;
+   }
    const std::basic_string<char_t> &GetContent() const noexcept
    {
       return pdata_->content;
@@ -359,7 +383,7 @@ public:
    {
       return pdata_->attrs.size();
    }
-   std::size_t GetChildrenCount() const noexcept
+   std::size_t GetChildCount() const noexcept
    {
       return pdata_->children.size();
    }
@@ -394,23 +418,23 @@ public:
    typedef TChar char_t;
    typedef Document my_t;
 
-   explicit Document(const char_t *text, bool replace_er = true)
+   explicit Document(const char_t *text, bool replace_er)
    {
       std::list<const char_t *> tokens = details::Tokenize(text);
-      details::RemoveWhitespaces(&tokens);
+      details::RemoveGaps(&tokens);
 
       auto it_right = tokens.begin();
-      auto it_left = it_right++;
+      auto it_left  = it_right++;
 
 
       const char_t *pfirst = *it_left;
       if (*pfirst != (char_t)'<') {
-         throw Exception("Malformed xml");
+         throw Exception("Malformed beginning");
       }
       if (*(pfirst + 1) == (char_t)'?') { // has declaration
          auto declaration = details::ExtractAttributes(*it_left, *it_right);
 
-         std::basic_string<char_t> *decl_attrs = details::GetDeclarationAttrs<char_t>();
+         std::basic_string<char_t> *decl_attrs  = details::GetDeclarationAttrs<char_t>();
          std::basic_string<char_t> *decl_data[] = {&version_, &encoding_, &standalone_};
 
          for (int i = 0; i < 3; ++i) {
@@ -423,7 +447,7 @@ public:
       }
       proot_ = details::BuildElementTree(tokens, replace_er);
       if (!proot_) {
-         throw Exception("Parsing failed");
+         throw Exception("Malformed xml");
       }
    }
    Document(my_t &&) = default;
@@ -458,27 +482,28 @@ private:
 
 
 template <typename TChar>
-inline Document<TChar> ParseString(const TChar *text)
+inline std::unique_ptr<Document<TChar>> ParseString(const TChar *text, bool entity_references = true)
 {
-   return Document<TChar>(text);
+   return std::make_unique<Document<TChar>>(text, entity_references);
 }
 
 template <typename TChar>
-inline Document<TChar> ParseString(const std::basic_string<TChar> &text)
+inline std::unique_ptr<Document<TChar>> ParseString(const std::basic_string<TChar> &text, bool entity_references = true)
 {
-   return Document<TChar>(text.c_str());
+   return std::make_unique<Document<TChar>>(text.c_str(), entity_references);
 }
 
 template <typename TChar>
-Document<TChar> ParseStream(std::basic_istream<TChar> &stream)
+std::unique_ptr<Document<TChar>> ParseStream(std::basic_istream<TChar> &stream, bool entity_references = true)
 {
    std::basic_string<TChar> s;
    char buf[4096];
-   while (stream.read(buf, sizeof(buf))) {
+
+   while (stream.read(buf, sizeof(buf)))
       s.append(buf, sizeof(buf));
-   }
    s.append(buf, stream.gcount());
-   return Document<TChar>(s.c_str());
+
+   return std::make_unique<Document<TChar>>(s.c_str(), entity_references);
 }
 
 } // namespace xml

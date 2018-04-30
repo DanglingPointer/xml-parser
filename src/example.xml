@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+   <items>
+   <item id="0001" type="donut">
+      <name>Cake</name>
+      <ppu>0.55</ppu>
+      <batters>
+         <batter id="1001">Regular</batter>
+         <batter id="1002">Chocolate</batter>
+         <batter id="1003">Blueberry</batter>
+      </batters>
+      <topping id="5001">None</topping>
+      <topping id="5002">Glazed</topping>
+      <topping id="5005">Su&#39;gar</topping>
+      <topping id="5006">&quot;Sprinkles&#x22;</topping>
+      <topping id="5003">Chocolate</topping>
+      <nm:topping nm:id="5004">Maple&amp;Apple</topping>
+   </item>
+   <item/>
+</items>
