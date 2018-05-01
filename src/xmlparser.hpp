@@ -1,3 +1,6 @@
+#ifndef XMLPARSER_HPP
+#define XMLPARSER_HPP
+
 #include <utility>
 #include <stack>
 #include <stdexcept>
@@ -16,7 +19,11 @@ namespace details {
 // Some helpers for resolving the correct standard library functions
 
 template <typename TChar>
-bool IsSpace(TChar symbol);
+bool IsSpace(TChar symbol)
+{
+   unsigned val = static_cast<unsigned>(symbol);
+   return val >= 9 && val <= 13;
+}
 
 #define IS_SPACE(func, type)                           \
    template <>                                         \
@@ -32,7 +39,11 @@ IS_SPACE(std::iswspace, wchar_t)
 
 
 template <typename TChar>
-bool IsAlpha(TChar symbol);
+bool IsAlpha(TChar symbol)
+{
+   unsigned val = static_cast<unsigned>(symbol);
+   return (val >= 65 && val <= 90) || (val >= 97 && val <= 122);
+}
 
 #define IS_ALPHA(func, type)                           \
    template <>                                         \
@@ -120,15 +131,15 @@ void RemoveGaps(std::list<const TChar *> *tokens)
    while (it_right != tokens->end()) {
       const TChar *pit  = *it_left;
       const TChar *pend = *it_right;
-      bool whitespaces  = true;
+      bool wspace_only  = true;
       for (; pit < pend; ++pit) {
          if (!IsSpace(*pit)) {
-            whitespaces = false;
+            wspace_only = false;
             break;
          }
       }
       ++it_right;
-      if (whitespaces) {
+      if (wspace_only) {
          it_left = tokens->erase(it_left);
       }
       else {
@@ -277,12 +288,12 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
 // Checks whether from points to start of an entity reference. If so, returns a pointer to the substitution string
 // and writes the length of the entity reference to count. Returns nullptr if no entity reference at from.
 template <typename TChar>
-const TChar *IsEntityRef(const TChar *from, std::size_t *count, std::size_t er_index)
+const TChar *CheckEntityRef(const TChar *from, std::size_t *count, std::size_t er_index)
 {
    const TChar **table_line = EntityRefTable<TChar>(er_index);
-   for (int i = 0; i < 3; ++i) {
+   for (int col = 0; col < 3; ++col) {
       // Compare with all 3 representations
-      const TChar *word = table_line[i];
+      const TChar *word = table_line[col];
       const TChar *pit  = from;
 
       bool equal = true;
@@ -311,10 +322,10 @@ void SubstituteEntityRef(std::basic_string<TChar> &content)
    for (const TChar *from = &content.front(); from < &content.back(); ++from) {
       // Compare 'from' with all 5 entity references
       for (int er_index = 0; er_index < 5; ++er_index) {
-         const TChar *replacement = IsEntityRef(from, &count, er_index);
-         if (replacement) {
+         const TChar *repl_str = CheckEntityRef(from, &count, er_index);
+         if (repl_str) {
             std::size_t pos = from - &content.front();
-            content.replace(pos, count, replacement); // no better overload :(
+            content.replace(pos, count, repl_str); // no better overload :(
             from = &content.front();
          }
       }
@@ -395,6 +406,8 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
 class Exception : std::logic_error
 {
 public:
+   Exception(const char *what) : std::logic_error(what)
+   {}
    Exception(const std::string &what) : std::logic_error(what)
    {}
    virtual const char *what() const noexcept
@@ -415,7 +428,7 @@ public:
    Element(details::ElementData<char_t> *pdata) : pdata_(pdata)
    {
       if (!pdata_) {
-         throw Exception("Failded to create element");
+         throw Exception("Failed to create element");
       }
    }
    Element(my_t &&) = default;
@@ -437,7 +450,7 @@ public:
       }
       return "";
    }
-   // Copy of the whole name if no namespace prefix.
+   // Returns copy of the whole name if no namespace prefix.
    std::basic_string<char_t> GetNamePostfix() const
    {
       size_t pos = pdata_->name.find_first_of((char_t)':');
@@ -454,17 +467,17 @@ public:
    {
       auto it = pdata_->attrs.find(attribute);
       if (it == pdata_->attrs.cend()) {
-         throw Exception("Attribute not found");
+         throw Exception("Attribute " + attribute + " not found");
       }
       return it->second;
    }
    const std::basic_string<char_t> &GetAttributeName(std::size_t index) const
    {
-      return GetAttribute(index)->first;
+      return GetAttr(index).first;
    }
    const std::basic_string<char_t> &GetAttributeValue(std::size_t index) const
    {
-      return GetAttribute(index)->second;
+      return GetAttr(index).second;
    }
    std::size_t GetAttributeCount() const noexcept
    {
@@ -478,28 +491,38 @@ public:
    Element<char_t> GetChild(std::size_t index) const
    {
       if (index >= pdata_->children.size()) {
-         throw Exception("Child not found");
+         throw Exception("Child " + std::to_string(index) + " not found, child count = " + std::to_string(pdata_->children.size()));
       }
       details::ElementData<char_t> *pnode = pdata_->children[index].get();
       return pnode;
    }
+   Element<char_t> GetChild(const std::basic_string<char_t> &name) const
+   {
+      for (auto it = pdata_->children.cbegin(); it != pdata_->children.cend(); ++it) {
+         details::ElementData<char_t> *pnode = it->get();
+         if (pnode->name == name) {
+            return pnode;
+         }
+      }
+      throw Exception("Child " + name + " not found");
+   }
 
 private:
-   const std::pair<const std::basic_string<char_t>, std::basic_string<char_t>> *GetAttribute(std::size_t index) const
+   const std::pair<const std::basic_string<char_t>, std::basic_string<char_t>> &GetAttr(std::size_t index) const
    {
       auto it = pdata_->attrs.cbegin();
       for (std::size_t i = 0; i < index; ++i) {
          if (it == pdata_->attrs.cend()) {
-            throw Exception("Attribute not found");
+            throw Exception("Attribute " + std::to_string(index) + " not found");
          }
          ++it;
       }
-      return &(*it);
+      return *it;
    }
    details::ElementData<char_t> *pdata_;
 };
 
-// Represents the whole xml document with or without declaration and one element tree.
+// Represents the whole xml document with (or without) declaration and one element tree.
 template <typename TChar>
 class Document
 {
@@ -507,7 +530,7 @@ public:
    typedef TChar char_t;
    typedef Document my_t;
 
-   explicit Document(const char_t *text, bool replace_er)
+   Document(const char_t *text, bool replace_er)
    {
       std::list<const char_t *> tokens = details::Tokenize(text);
       details::RemoveGaps(&tokens);
@@ -570,7 +593,7 @@ private:
    std::basic_string<char_t> standalone_;
 };
 
-// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the process, 
+// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the process,
 // set entity_references to 'false' if that is undesirable.
 template <typename TChar>
 inline std::unique_ptr<Document<TChar>> ParseString(const TChar *text, bool entity_references = true)
@@ -578,7 +601,7 @@ inline std::unique_ptr<Document<TChar>> ParseString(const TChar *text, bool enti
    return std::make_unique<Document<TChar>>(text, entity_references);
 }
 
-// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the process, 
+// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the process,
 // set entity_references to 'false' if that is undesirable.
 template <typename TChar>
 inline std::unique_ptr<Document<TChar>> ParseString(const std::basic_string<TChar> &text, bool entity_references = true)
@@ -602,3 +625,5 @@ std::unique_ptr<Document<TChar>> ParseStream(std::basic_istream<TChar> &stream, 
 }
 
 } // namespace xml
+
+#endif // XMLPARSER_HPP
