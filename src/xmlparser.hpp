@@ -236,6 +236,20 @@ int DetermineToken(const TChar *pbegin, const TChar *pend) noexcept
    return Token::CONTENT;
 }
 
+// Removes comment tokens in the beginning of the list
+template <typename TChar>
+void RemoveLeadingComments(std::list<const TChar *> *tokens)
+{
+   auto it_right = tokens->begin();
+   auto it_left  = it_right++;
+
+   while(DetermineToken(*it_left, *it_right) == Token::COMMENT) {
+      ++it_right;
+      ++it_left;
+      tokens->pop_front();
+   }
+}
+
 // Reads element name from the opening tag starting at pbegin (it must point to a '<').
 template <typename TChar>
 std::basic_string<TChar> ExtractName(const TChar *pbegin)
@@ -535,6 +549,7 @@ public:
       std::list<const char_t *> tokens = details::Tokenize(text);
       details::RemoveGaps(&tokens);
       details::RemoveInsideComments(&tokens);
+      details::RemoveLeadingComments(&tokens);
 
       auto it_right = tokens.begin();
       auto it_left  = it_right++;
@@ -557,6 +572,7 @@ public:
             }
          }
          tokens.pop_front();
+         details::RemoveLeadingComments(&tokens);
       }
       proot_ = details::BuildElementTree(tokens, replace_er);
       if (!proot_) {
