@@ -238,7 +238,7 @@ int DetermineToken(const TChar *pbegin, const TChar *pend) noexcept
 
 // Removes comment tokens in the beginning of the list
 template <typename TChar>
-void RemoveLeadingComments(std::list<const TChar *> *tokens)
+inline void RemoveLeadingComments(std::list<const TChar *> *tokens)
 {
    auto it_right = tokens->begin();
    auto it_left  = it_right++;
@@ -340,7 +340,7 @@ void SubstituteEntityRef(std::basic_string<TChar> &content)
          if (repl_str) {
             std::size_t pos = from - &content.front();
             content.replace(pos, count, repl_str); // no better overload :(
-            from = &content.front();
+            from = &content.front() + pos; 
          }
       }
    }
@@ -551,16 +551,12 @@ public:
       details::RemoveInsideComments(&tokens);
       details::RemoveLeadingComments(&tokens);
 
-      auto it_right = tokens.begin();
-      auto it_left  = it_right++;
-
-
-      const char_t *pfirst = *it_left;
+      const char_t *pfirst = *tokens.begin();
       if (*pfirst != (char_t)'<') {
          throw Exception("Malformed beginning");
       }
       if (*(pfirst + 1) == (char_t)'?') { // has declaration
-         auto declaration = details::ExtractAttributes(*it_left);
+         auto declaration = details::ExtractAttributes(pfirst);
 
          std::basic_string<char_t> *decl_attrs  = details::GetDeclarationAttrs<char_t>();
          std::basic_string<char_t> *decl_data[] = {&version_, &encoding_, &standalone_};
