@@ -28,6 +28,7 @@ const char *text =
 </items>
 )";
 
+
 template <typename TChar>
 std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml::Element<TChar> &e)
 {
@@ -57,7 +58,7 @@ int main(int argc, char *argv[])
 
       if (argc > 1) {
          std::ifstream file(argv[1]);
-         doc = xml::ParseStream(file, true);
+         doc = xml::ParseStream(file, true);         
       }
       else {
          doc = xml::ParseString(text);

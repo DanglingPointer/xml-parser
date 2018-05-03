@@ -327,20 +327,21 @@ const TChar *CheckEntityRef(const TChar *from, std::size_t *count, std::size_t e
 
 // Replaces all entity references in 'content' by the corresponding ascii symbols.
 template <typename TChar>
-void SubstituteEntityRef(std::basic_string<TChar> &content)
+void SubstituteEntityRef(std::basic_string<TChar> *content)
 {
-   if (content.empty()) {
+   if (content->empty()) {
       return;
    }
    size_t count = 0;
-   for (const TChar *from = &content.front(); from < &content.back(); ++from) {
+   for (const TChar *from = &content->front(); from < &content->back(); ++from) {
       // Compare 'from' with all 5 entity references
       for (int er_index = 0; er_index < 5; ++er_index) {
          const TChar *repl_str = CheckEntityRef(from, &count, er_index);
          if (repl_str) {
-            std::size_t pos = from - &content.front();
-            content.replace(pos, count, repl_str); // no better overload :(
-            from = &content.front() + pos; 
+            std::size_t pos = from - &content->front();
+            content->replace(pos, count, repl_str); // no better overload :(
+            from = &content->front() + pos; 
+            break;
          }
       }
    }
@@ -402,7 +403,7 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
       if (what == Token::CONTENT) {
          tree.top()->content.append(pbegin, pend);
          if (replace_er) {
-            SubstituteEntityRef(tree.top()->content);
+            SubstituteEntityRef(&tree.top()->content);
          }
          continue;
       }
