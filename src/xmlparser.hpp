@@ -25,11 +25,11 @@ bool IsSpace(TChar symbol)
    return val >= 9 && val <= 13;
 }
 
-#define IS_SPACE(func, type)                           \
-   template <>                                         \
-   inline bool IsSpace<type>(type symbol)              \
-   {                                                   \
-      return func(static_cast<unsigned type>(symbol)); \
+#define IS_SPACE(func, type)              \
+   template <>                            \
+   inline bool IsSpace<type>(type symbol) \
+   {                                      \
+      return func(symbol);                \
    }
 
 IS_SPACE(std::isspace, char)
@@ -45,11 +45,11 @@ bool IsAlpha(TChar symbol)
    return (val >= 65 && val <= 90) || (val >= 97 && val <= 122);
 }
 
-#define IS_ALPHA(func, type)                           \
-   template <>                                         \
-   inline bool IsAlpha<type>(type symbol)              \
-   {                                                   \
-      return func(static_cast<unsigned type>(symbol)); \
+#define IS_ALPHA(func, type)                  \
+   template <>                                \
+   inline bool IsAlpha<type>(type symbol)     \
+   {                                          \
+      return func(static_cast<type>(symbol)); \
    }
 
 IS_ALPHA(std::isalpha, char)
@@ -243,7 +243,7 @@ inline void RemoveLeadingComments(std::list<const TChar *> *tokens)
    auto it_right = tokens->begin();
    auto it_left  = it_right++;
 
-   while(DetermineToken(*it_left, *it_right) == Token::COMMENT) {
+   while (DetermineToken(*it_left, *it_right) == Token::COMMENT) {
       ++it_right;
       ++it_left;
       tokens->pop_front();
@@ -340,7 +340,7 @@ void SubstituteEntityRef(std::basic_string<TChar> *content)
          if (repl_str) {
             std::size_t pos = from - &content->front();
             content->replace(pos, count, repl_str); // no better overload :(
-            from = &content->front() + pos; 
+            from = &content->front() + pos;
             break;
          }
       }
