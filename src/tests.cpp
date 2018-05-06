@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <chrono>
+#include <thread>
 #include "xmlparser.hpp"
 
 const char *text =
@@ -33,11 +34,11 @@ template <typename TChar>
 std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml::Element<TChar> &e)
 {
    out << "\nName: " << e.GetName() << "\nChildCount: " << e.GetChildCount() << "\nContent: " << e.GetContent() << "\nAttributes: ";
-   for (int i = 0; i < e.GetAttributeCount(); ++i) {
+   for (std::size_t i = 0; i < e.GetAttributeCount(); ++i) {
       out << e.GetAttributeName(i) << ":" << e.GetAttributeValue(i) << " ";
    }
    out << "\nName prefix: " << e.GetNamePrefix() << "\nName postfix: " << e.GetNamePostfix() << "\n{\n";
-   for (int i = 0; i < e.GetChildCount(); ++i) {
+   for (std::size_t i = 0; i < e.GetChildCount(); ++i) {
       out << e.GetChild(i) << std::endl;
    }
    return out << "} // " << e.GetName() << "\n";
@@ -52,17 +53,19 @@ std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml:
 
 int main(int argc, char *argv[])
 {
+   using namespace std::chrono_literals;
    std::unique_ptr<xml::Document<char>> doc;
    try {
       auto start = std::chrono::system_clock::now();
 
       if (argc > 1) {
          std::ifstream file(argv[1]);
-         doc = xml::ParseStream(file, true);         
+         doc = xml::ParseStream(file, true);
       }
       else {
          doc = xml::ParseString(text);
       }
+      // std::this_thread::sleep_for(1s);
       std::cout << *doc;
 
       auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
