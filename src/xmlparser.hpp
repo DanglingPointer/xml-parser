@@ -1,6 +1,7 @@
 #ifndef XMLPARSER_HPP
 #define XMLPARSER_HPP
 
+#include <algorithm>
 #include <utility>
 #include <stack>
 #include <stdexcept>
@@ -45,11 +46,11 @@ bool IsAlpha(TChar symbol)
    return (val >= 65 && val <= 90) || (val >= 97 && val <= 122);
 }
 
-#define IS_ALPHA(func, type)                  \
-   template <>                                \
-   inline bool IsAlpha<type>(type symbol)     \
-   {                                          \
-      return func(static_cast<type>(symbol)); \
+#define IS_ALPHA(func, type)              \
+   template <>                            \
+   inline bool IsAlpha<type>(type symbol) \
+   {                                      \
+      return func(symbol);                \
    }
 
 IS_ALPHA(std::isalpha, char)
@@ -82,23 +83,22 @@ ENTITY_REF_TABLE(U, char32_t)
 
 // Keys of attributes in xml declaration, in different encodings
 template <typename TChar>
-std::basic_string<TChar> *GetDeclarationAttrs() noexcept;
+std::basic_string<TChar> *DeclarationAttrs() noexcept;
 
-#define GET_DECLARATION_ATTRS(prefix, type)                                                                        \
+#define DECLARATION_ATTRS(prefix, type)                                                                            \
    template <>                                                                                                     \
-   inline std::basic_string<type> *GetDeclarationAttrs<type>() noexcept                                            \
+   inline std::basic_string<type> *DeclarationAttrs<type>() noexcept                                               \
    {                                                                                                               \
       static std::basic_string<type> decl_attrs[] = {prefix##"version", prefix##"encoding", prefix##"standalone"}; \
       return decl_attrs;                                                                                           \
    }
 
-GET_DECLARATION_ATTRS(, char)
-GET_DECLARATION_ATTRS(L, wchar_t)
-GET_DECLARATION_ATTRS(u, char16_t)
-GET_DECLARATION_ATTRS(U, char32_t)
+DECLARATION_ATTRS(, char)
+DECLARATION_ATTRS(L, wchar_t)
+DECLARATION_ATTRS(u, char16_t)
+DECLARATION_ATTRS(U, char32_t)
 
-#undef GET_DECLARATION_ATTRS
-
+#undef DECLARATION_ATTRS
 
 // Creates a list of pointers: each one pointing either to a '<' or behind a '>'.
 // Text between each pair of successive pointers is a token.
@@ -121,7 +121,8 @@ std::list<const TChar *> Tokenize(const TChar *text)
    return tokens;
 }
 
-// Removes pointers surrounding regions of whitespaces, so that no tokens consist entirely of whitespaces.
+// Removes pointers surrounding regions of whitespaces, so that no tokens consist entirely of
+// whitespaces.
 template <typename TChar>
 void RemoveGaps(std::list<const TChar *> *tokens)
 {
@@ -129,26 +130,16 @@ void RemoveGaps(std::list<const TChar *> *tokens)
    auto it_left  = it_right++;
 
    while (it_right != tokens->end()) {
-      const TChar *pit  = *it_left;
-      const TChar *pend = *it_right;
-      bool wspace_only  = true;
-      for (; pit < pend; ++pit) {
-         if (!IsSpace(*pit)) {
-            wspace_only = false;
-            break;
-         }
-      }
+      bool wspace_only = std::all_of(*it_left, *it_right, IsSpace<TChar>);
       ++it_right;
-      if (wspace_only) {
+      if (wspace_only)
          it_left = tokens->erase(it_left);
-      }
-      else {
+      else
          ++it_left;
-      }
    }
 }
 
-// Detect comment start and end. Using strncmp was much slower!
+// Detect comment start and end. Using strncmp or std::equal was much slower!
 template <typename TChar>
 inline bool IsCommentStart(const TChar *pit) noexcept
 {
@@ -157,7 +148,7 @@ inline bool IsCommentStart(const TChar *pit) noexcept
 template <typename TChar>
 inline bool IsCommentEnd(const TChar *pit) noexcept
 {
-   return *pit == (TChar)'>' && *(pit - 1) == (TChar)'-' && *(pit - 2) == (TChar)'-';
+   return pit[0] == (TChar)'-' && pit[1] == (TChar)'-' && pit[2] == (TChar)'>';
 }
 
 // Erases pointers pointing to positions inside comments, so that each comment is exactly one token.
@@ -172,19 +163,21 @@ void RemoveInsideComments(std::list<const TChar *> *tokens)
 
    while (it_right != tokens->end()) {
 
-      const TChar *pend = *it_right;
-      for (const TChar *pit = *it_left; pit < pend; ++pit) {
-         if (it_erase_from == tokens->end() && IsCommentStart(pit)) {
-            it_erase_from = it_right; // erase next token
-            pit += 3;                 // IsCommentStart() checks next 3 symbols
-         }
-         else if (it_erase_from != tokens->end() && IsCommentEnd(pit)) {
-            it_erase_to = it_right; // erase untill (but not inclusive) next token
-            break;
-         }
+      bool first_comment_start =
+          it_erase_from == tokens->end() &&
+          std::any_of(*it_left, *it_right - 3, [](const TChar &c) { return IsCommentStart<TChar>(&c); });
+      if (first_comment_start) {
+         it_erase_from = it_right; // erase next token
       }
+      bool last_comment_end =
+          it_erase_from != tokens->end() &&
+          std::any_of(*it_left, *it_right - 2, [](const TChar &c) { return IsCommentEnd<TChar>(&c); });
+      if (last_comment_end) {
+         it_erase_to = it_right; // erase untill (but not inclusive) next token
+      }
+
       if (it_erase_from != tokens->end() && it_erase_to != tokens->end()) {
-         tokens->erase(it_erase_from, it_erase_to); // no-op if it_erase_from==it_erase_to i.e. if there are no tokens inside comment
+         tokens->erase(it_erase_from, it_erase_to); // no-op if it_erase_from==it_erase_to
          it_right = it_erase_to;
          it_left  = it_right++;
 
@@ -220,14 +213,10 @@ int DetermineToken(const TChar *pbegin, const TChar *pend) noexcept
          return Token::COMMENT;
       }
 
-      // roll forward till we reach closing symbol '>'
-      while (pbegin < pend && *pbegin != (TChar)'>') {
-         ++pbegin;
-      }
-      if (*pbegin != (TChar)'>') {
+      pbegin = std::find(pbegin, pend, (TChar)'>');
+      if (pbegin == pend) {
          return Token::ERROR;
       }
-
       int what = Token::OPEN;
       if (*(pbegin - 1) == (TChar)'/')
          what |= Token::CLOSE;
@@ -252,55 +241,41 @@ inline void RemoveLeadingComments(std::list<const TChar *> *tokens)
 
 // Reads element name from the opening tag starting at pbegin (it must point to a '<').
 template <typename TChar>
-std::basic_string<TChar> ExtractName(const TChar *pbegin)
+std::basic_string<TChar> ExtractName(const TChar *pbegin, const TChar *pend)
 {
-   ++pbegin;
-   const TChar *pend = pbegin;
-   while (!IsSpace(*pend) && *pend != (TChar)'>' && *pend != (TChar)'/') {
-      ++pend;
-   }
+   pend = std::find_if(++pbegin, pend, [](TChar c) { return IsSpace(c) || c == (TChar)'>' || c == (TChar)'/'; });
    return std::basic_string<TChar>(pbegin, pend);
 }
 
 // Reads attribute pairs from the tag starting at pbegin (it must point to a '<').
 template <typename TChar>
-std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAttributes(const TChar *pbegin)
+std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAttributes(const TChar *pbegin,
+                                                                                         const TChar *pend)
 {
-   const TChar *pit = pbegin;
-   // skip element name
-   while (!IsSpace(*pit) && *pit != (TChar)'>') {
-      ++pit;
-   }
    std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> attrs;
+   // skip element name
+   pbegin = std::find_if(pbegin, pend, [](TChar c) { return c == (TChar)'>' || IsSpace(c); });
 
-   const TChar *keybegin, *keyend, *valbegin, *valend;
-   keybegin = keyend = valbegin = valend = nullptr;
+   while (pbegin < pend) {
+      const TChar *keybegin = std::find_if(pbegin, pend, IsAlpha<TChar>);
+      if (keybegin == pend) {
+         return attrs;
+      }
+      const TChar *keyend   = std::find(keybegin, pend, (TChar)'=');
+      const TChar *valbegin = keyend + 2;
+      const TChar *valend   = std::find(valbegin, pend, *(valbegin - 1)); // either " or '
 
-   for (; *pit != (TChar)'>'; ++pit) {
-      if (IsAlpha(*pit) && keybegin == nullptr) {
-         keybegin = pit;
-         continue;
-      }
-      if (*pit == (TChar)'=') {
-         keyend   = pit++;     // now *keyend=='=' and *pit=='\"'
-         valbegin = (pit + 1); // now valbegin is behind the left '\"', pit will be there at the end of the iteration
-         continue;
-      }
-      if ((*pit == (TChar)'\"' || *pit == (TChar)'\'') && valbegin != nullptr) {
-         valend = pit;
-         // extract key and value:
-         std::basic_string<TChar> key(keybegin, keyend);
-         std::basic_string<TChar> value(valbegin, valend);
-         attrs.emplace(std::move(key), std::move(value));
-         // reset pointers
-         keybegin = keyend = valbegin = valend = nullptr;
-      }
+      std::basic_string<TChar> key(keybegin, keyend);
+      std::basic_string<TChar> value(valbegin, valend);
+      attrs.emplace(std::move(key), std::move(value));
+      pbegin = valend;
    }
    return attrs;
 }
 
-// Checks whether from points to start of an entity reference. If so, returns a pointer to the substitution string
-// and writes the length of the entity reference to count. Returns nullptr if no entity reference at from.
+// Checks whether 'from' points to start of an entity reference. If so, returns a pointer to the
+// substitution string and writes the length of the entity reference to 'count'. Returns nullptr if no
+// entity reference at 'from'.
 template <typename TChar>
 const TChar *CheckEntityRef(const TChar *from, std::size_t *count, std::size_t er_index)
 {
@@ -333,7 +308,7 @@ void SubstituteEntityRef(std::basic_string<TChar> *content)
       return;
    }
    size_t count = 0;
-   for (const TChar *from = &content->front(); from < &content->back(); ++from) {
+   for (const TChar *from = &content->front(); from < &content->back() - 2; ++from) {
       // Compare 'from' with all 5 entity references
       for (int er_index = 0; er_index < 5; ++er_index) {
          const TChar *repl_str = CheckEntityRef(from, &count, er_index);
@@ -372,8 +347,8 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
 
    // Set up root and push on stack
    auto root   = std::make_unique<ElementData<TChar>>();
-   root->name  = ExtractName(*it_left);
-   root->attrs = ExtractAttributes(*it_left);
+   root->name  = ExtractName(*it_left, *it_right);
+   root->attrs = ExtractAttributes(*it_left, *it_right);
    tree.push(root.get());
 
    ++it_right;
@@ -391,8 +366,8 @@ std::unique_ptr<ElementData<TChar>> BuildElementTree(const std::list<const TChar
          ElementData<TChar> *pelem = new ElementData<TChar>();
          tree.top()->children.emplace_back(pelem); // creates std::unique_ptr implicitly
 
-         pelem->name  = ExtractName(pbegin);
-         pelem->attrs = ExtractAttributes(pbegin);
+         pelem->name  = ExtractName(pbegin, pend);
+         pelem->attrs = ExtractAttributes(pbegin, pend);
 
          tree.push(pelem);
       }
@@ -506,7 +481,8 @@ public:
    Element<char_t> GetChild(std::size_t index) const
    {
       if (index >= pdata_->children.size()) {
-         throw Exception("Child " + std::to_string(index) + " not found, child count = " + std::to_string(pdata_->children.size()));
+         throw Exception("Child " + std::to_string(index) +
+                         " not found, child count = " + std::to_string(pdata_->children.size()));
       }
       details::ElementData<char_t> *pnode = pdata_->children[index].get();
       return pnode;
@@ -557,9 +533,9 @@ public:
          throw Exception("Malformed beginning");
       }
       if (*(pfirst + 1) == (char_t)'?') { // has declaration
-         auto declaration = details::ExtractAttributes(pfirst);
+         auto declaration = details::ExtractAttributes(pfirst, *(++tokens.begin()));
 
-         std::basic_string<char_t> *decl_attrs  = details::GetDeclarationAttrs<char_t>();
+         std::basic_string<char_t> *decl_attrs  = details::DeclarationAttrs<char_t>();
          std::basic_string<char_t> *decl_data[] = {&version_, &encoding_, &standalone_};
 
          for (int i = 0; i < 3; ++i) {
@@ -606,24 +582,25 @@ private:
    std::basic_string<char_t> standalone_;
 };
 
-// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the process,
-// set entity_references to 'false' if that is undesirable.
+// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the
+// process, set entity_references to 'false' if that is undesirable.
 template <typename TChar>
 inline std::unique_ptr<Document<TChar>> ParseString(const TChar *text, bool entity_references = true)
 {
    return std::make_unique<Document<TChar>>(text, entity_references);
 }
 
-// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the process,
-// set entity_references to 'false' if that is undesirable.
+// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the
+// process, set entity_references to 'false' if that is undesirable.
 template <typename TChar>
 inline std::unique_ptr<Document<TChar>> ParseString(const std::basic_string<TChar> &text, bool entity_references = true)
 {
    return std::make_unique<Document<TChar>>(text.c_str(), entity_references);
 }
 
-// Reads data from 'stream' into cache and parses it into an xml::Document. Lower performance than the other
-// overloads. Parsing entity references might slow down the process, set entity_references to 'false' if that is undesirable.
+// Reads data from 'stream' into cache and parses it into an xml::Document. Lower performance than
+// the other overloads. Parsing entity references might slow down the process, set entity_references
+// to 'false' if that is undesirable.
 template <typename TChar>
 std::unique_ptr<Document<TChar>> ParseStream(std::basic_istream<TChar> &stream, bool entity_references = true)
 {
