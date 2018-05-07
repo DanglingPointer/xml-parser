@@ -33,7 +33,8 @@ const char *text =
 template <typename TChar>
 std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml::Element<TChar> &e)
 {
-   out << "\nName: " << e.GetName() << "\nChildCount: " << e.GetChildCount() << "\nContent: " << e.GetContent() << "\nAttributes: ";
+   out << "\nName: " << e.GetName() << "\nChildCount: " << e.GetChildCount() << "\nContent: " << e.GetContent()
+       << "\nAttributes: ";
    for (std::size_t i = 0; i < e.GetAttributeCount(); ++i) {
       out << e.GetAttributeName(i) << ":" << e.GetAttributeValue(i) << " ";
    }
@@ -47,7 +48,8 @@ std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml:
 template <typename TChar>
 std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml::Document<TChar> &doc)
 {
-   out << "Encoding = " << doc.GetEncoding() << ", Version = " << doc.GetVersion() << ", Standalone = " << doc.GetStandalone() << std::endl;
+   out << "Encoding = " << doc.GetEncoding() << ", Version = " << doc.GetVersion()
+       << ", Standalone = " << doc.GetStandalone() << std::endl;
    return out << doc.GetRoot() << std::endl;
 }
 
@@ -58,18 +60,20 @@ int main(int argc, char *argv[])
    try {
       auto start = std::chrono::system_clock::now();
 
-      if (argc > 1) {
-         std::ifstream file(argv[1]);
-         doc = xml::ParseStream(file, true);
+      for (int i = 0; i < 1000; ++i) {
+         if (argc > 1) {
+            std::ifstream file(argv[1]);
+            doc = xml::ParseStream(file, true);
+         }
+         else {
+            doc = xml::ParseString(text);
+         }
+         std::this_thread::sleep_for(1ms);
+         std::cout << doc->GetRoot().GetChildCount() << std::endl;
       }
-      else {
-         doc = xml::ParseString(text);
-      }
-      // std::this_thread::sleep_for(1s);
-      std::cout << *doc;
 
-      auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
-      std::cout << "\nTime: " << elapsed.count() << "us (including reading file)\n";
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
+      std::cout << "\nTime: " << elapsed.count() << "ms (including reading file)\n";
    }
    catch (const xml::Exception &e) {
       std::cout << e.what() << std::endl;

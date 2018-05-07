@@ -1,7 +1,7 @@
 #
 # Compiler flags
 #
-CXX    = clang++
+CXX    = g++
 CXXFLAGS = -Wall -Wextra -std=c++14
 
 #

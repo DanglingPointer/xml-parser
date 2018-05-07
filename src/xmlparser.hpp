@@ -83,41 +83,22 @@ ENTITY_REF_TABLE(U, char32_t)
 
 // Keys of attributes in xml declaration, in different encodings
 template <typename TChar>
-std::basic_string<TChar> *GetDeclarationAttrs() noexcept;
+std::basic_string<TChar> *DeclarationAttrs() noexcept;
 
-#define GET_DECLARATION_ATTRS(prefix, type)                                                                        \
+#define DECLARATION_ATTRS(prefix, type)                                                                            \
    template <>                                                                                                     \
-   inline std::basic_string<type> *GetDeclarationAttrs<type>() noexcept                                            \
+   inline std::basic_string<type> *DeclarationAttrs<type>() noexcept                                               \
    {                                                                                                               \
       static std::basic_string<type> decl_attrs[] = {prefix##"version", prefix##"encoding", prefix##"standalone"}; \
       return decl_attrs;                                                                                           \
    }
 
-GET_DECLARATION_ATTRS(, char)
-GET_DECLARATION_ATTRS(L, wchar_t)
-GET_DECLARATION_ATTRS(u, char16_t)
-GET_DECLARATION_ATTRS(U, char32_t)
+DECLARATION_ATTRS(, char)
+DECLARATION_ATTRS(L, wchar_t)
+DECLARATION_ATTRS(u, char16_t)
+DECLARATION_ATTRS(U, char32_t)
 
-#undef GET_DECLARATION_ATTRS
-
-// Table for xml comments
-template <typename TChar>
-const TChar *CommentTable(std::size_t index) noexcept;
-
-#define COMMENT_TABLE(prefix, type)                                  \
-   template <>                                                       \
-   inline const type *CommentTable<type>(std::size_t index) noexcept \
-   {                                                                 \
-      static const type *table[] = {prefix##"<!--", prefix##"-->"};  \
-      return table[index];                                           \
-   }
-
-COMMENT_TABLE(, char)
-COMMENT_TABLE(L, wchar_t)
-COMMENT_TABLE(u, char16_t)
-COMMENT_TABLE(U, char32_t)
-
-#undef COMMENT_TABLE
+#undef DECLARATION_ATTRS
 
 // Creates a list of pointers: each one pointing either to a '<' or behind a '>'.
 // Text between each pair of successive pointers is a token.
@@ -140,7 +121,6 @@ std::list<const TChar *> Tokenize(const TChar *text)
    return tokens;
 }
 
-// typedef wchar_t TChar;
 // Removes pointers surrounding regions of whitespaces, so that no tokens consist entirely of
 // whitespaces.
 template <typename TChar>
@@ -159,18 +139,16 @@ void RemoveGaps(std::list<const TChar *> *tokens)
    }
 }
 
-// Detect comment start and end. Using strncmp was much slower!
+// Detect comment start and end. Using strncmp or std::equal was much slower!
 template <typename TChar>
 inline bool IsCommentStart(const TChar *pit) noexcept
 {
-   return std::equal(pit, pit + 4, CommentTable<TChar>(0));
-   // return pit[0] == (TChar)'<' && pit[1] == (TChar)'!' && pit[2] == (TChar)'-' && pit[3] == (TChar)'-';
+   return pit[0] == (TChar)'<' && pit[1] == (TChar)'!' && pit[2] == (TChar)'-' && pit[3] == (TChar)'-';
 }
 template <typename TChar>
 inline bool IsCommentEnd(const TChar *pit) noexcept
 {
-   return std::equal(pit, pit + 3, CommentTable<TChar>(1));
-   // return pit[0] == (TChar)'-' && pit[1] == (TChar)'-' && pit[2] == (TChar)'>';
+   return pit[0] == (TChar)'-' && pit[1] == (TChar)'-' && pit[2] == (TChar)'>';
 }
 
 // Erases pointers pointing to positions inside comments, so that each comment is exactly one token.
@@ -285,10 +263,8 @@ std::unordered_map<std::basic_string<TChar>, std::basic_string<TChar>> ExtractAt
       }
       const TChar *keyend   = std::find(keybegin, pend, (TChar)'=');
       const TChar *valbegin = keyend + 2;
-      const TChar *valend   = std::find(valbegin, pend, (TChar)'\"');
-      if (valend == pend)
-         valend = std::find(valbegin, pend, (TChar)'\'');
-      // extract key and value:
+      const TChar *valend   = std::find(valbegin, pend, *(valbegin - 1)); // either " or '
+
       std::basic_string<TChar> key(keybegin, keyend);
       std::basic_string<TChar> value(valbegin, valend);
       attrs.emplace(std::move(key), std::move(value));
@@ -304,36 +280,22 @@ template <typename TChar>
 const TChar *CheckEntityRef(const TChar *from, std::size_t *count, std::size_t er_index)
 {
    const TChar **table_line = EntityRefTable<TChar>(er_index);
+   for (int col = 0; col < 3; ++col) {
+      // Compare with all 3 representations
+      const TChar *word = table_line[col];
+      const TChar *pit  = from;
 
-   // Column 0 has variable width
-   const TChar *pattern = table_line[0];
-   const TChar *pit     = from;
-   bool equal           = true;
-   while (*pattern && *pit) {
-      if (*pattern++ != *pit++) {
-         equal = false;
-         break;
+      bool equal = true;
+      while (*word && *pit) {
+         if (*word++ != *pit++) {
+            equal = false;
+            break;
+         }
       }
-   }
-   if (equal) {
-      *count = pit - from;
-      return table_line[3];
-   }
-
-   // Column 1 has width 5
-   pattern = table_line[1];
-   equal   = std::equal(pattern, pattern + 5, from);
-   if (equal) {
-      *count = 5;
-      return table_line[3];
-   }
-
-   // Column 2 has width 6
-   pattern = table_line[2];
-   equal   = std::equal(pattern, pattern + 6, from);
-   if (equal) {
-      *count = 6;
-      return table_line[3];
+      if (equal) {
+         *count = pit - from;
+         return table_line[3];
+      }
    }
    return nullptr;
 }
@@ -573,7 +535,7 @@ public:
       if (*(pfirst + 1) == (char_t)'?') { // has declaration
          auto declaration = details::ExtractAttributes(pfirst, *(++tokens.begin()));
 
-         std::basic_string<char_t> *decl_attrs  = details::GetDeclarationAttrs<char_t>();
+         std::basic_string<char_t> *decl_attrs  = details::DeclarationAttrs<char_t>();
          std::basic_string<char_t> *decl_data[] = {&version_, &encoding_, &standalone_};
 
          for (int i = 0; i < 3; ++i) {
