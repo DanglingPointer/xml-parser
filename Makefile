@@ -1,8 +1,8 @@
 #
 # Compiler flags
 #
-CXX    = g++
-CXXFLAGS = -Wall -Wextra -std=c++14
+CXX    = clang++
+CXXFLAGS = -Wall -std=c++14
 
 #
 # Project files

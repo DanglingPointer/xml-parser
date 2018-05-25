@@ -26,6 +26,7 @@
 #include <string>
 #include <memory>
 #include <istream>
+#include <sstream>
 #include <cctype>
 #include <cwctype>
 #include <list>
@@ -99,14 +100,15 @@ ENTITY_REF_TABLE(U, char32_t)
 
 // Keys of attributes in xml declaration, in different encodings
 template <typename TChar>
-std::basic_string<TChar> *DeclarationAttrs() noexcept;
+const std::basic_string<TChar> *DeclarationAttrs() noexcept;
 
-#define DECLARATION_ATTRS(prefix, type)                                                                            \
-   template <>                                                                                                     \
-   inline std::basic_string<type> *DeclarationAttrs<type>() noexcept                                               \
-   {                                                                                                               \
-      static std::basic_string<type> decl_attrs[] = {prefix##"version", prefix##"encoding", prefix##"standalone"}; \
-      return decl_attrs;                                                                                           \
+#define DECLARATION_ATTRS(prefix, type)                                                           \
+   template <>                                                                                    \
+   inline const std::basic_string<type> *DeclarationAttrs<type>() noexcept                        \
+   {                                                                                              \
+      static const std::basic_string<type> decl_attrs[] = {prefix##"version", prefix##"encoding", \
+                                                           prefix##"standalone"};                 \
+      return decl_attrs;                                                                          \
    }
 
 DECLARATION_ATTRS(, char)
@@ -115,6 +117,42 @@ DECLARATION_ATTRS(u, char16_t)
 DECLARATION_ATTRS(U, char32_t)
 
 #undef DECLARATION_ATTRS
+
+// XML markup for writing
+template <typename TChar>
+const TChar *MarkupTable(std::size_t index) noexcept;
+
+#define MARKUP_TABLE(prefix, type)                                                                           \
+   template <>                                                                                               \
+   inline const type *MarkupTable<type>(std::size_t index) noexcept                                          \
+   {                                                                                                         \
+      static const type *table[] = {prefix##"<", prefix##">",  prefix##" />",   prefix##"</", prefix##"=\"", \
+                                    prefix##" ", prefix##"\"", prefix##"<?xml", prefix##" ?>"};              \
+      return table[index];                                                                                   \
+   }
+
+MARKUP_TABLE(, char)
+MARKUP_TABLE(L, wchar_t)
+MARKUP_TABLE(u, char16_t)
+MARKUP_TABLE(U, char32_t)
+
+enum Markup : size_t
+{
+   OPENING_TAG_START = 0, // <
+   SINGLE_TAG_END    = 2, // _/>
+   OPENING_TAG_END   = 1, // >
+   CLOSING_TAG_START = 3, // </
+   CLOSING_TAG_END   = 1, // >
+   ATTR_START        = 5, // _
+   ATTR_END          = 6, // "
+   ATTR_MID          = 4, // ="
+   DECL_START        = 7, // <?xml
+   DECL_END          = 8  // _?>
+};
+
+#undef MARKUP_TABLE
+
+
 
 // Creates a list of pointers: each one pointing either to a '<' or behind a '>'.
 // Text between each pair of successive pointers is a token.
@@ -338,6 +376,25 @@ void SubstituteEntityRef(std::basic_string<TChar> *content)
    }
 }
 
+// Replaces unallowed symbols in 'content' by entity references (uses first column)
+template <typename TChar>
+std::basic_string<TChar> InsertEntityRef(std::basic_string<TChar> content)
+{
+   for (auto it = content.begin(); it != content.end(); ++it) {
+      for (int er_index = 0; er_index < 5; ++er_index) {
+         const TChar **table_line = EntityRefTable<TChar>(er_index);
+
+         if (*it == *table_line[3]) { // comparing only one char
+            std::size_t pos = it - content.begin();
+            content.replace(pos, 1, table_line[0]); // uses first column for substitution
+            it = content.begin() + pos + 3;         // min length of ER is 4 = 3+1
+            break;
+         }
+      }
+   }
+   return std::move(content);
+}
+
 // Node in the resulting tree. Contains all data about one xml element and pointers to its children.
 template <typename TChar>
 struct ElementData
@@ -349,6 +406,26 @@ struct ElementData
    std::basic_string<char_t> name;
    std::basic_string<char_t> content;
 };
+
+template <typename TChar>
+std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const ElementData<TChar> &e)
+{
+   out << MarkupTable<TChar>(Markup::OPENING_TAG_START) << e.name;
+   for (const auto &attr : e.attrs) {
+      out << MarkupTable<TChar>(Markup::ATTR_START) << attr.first << MarkupTable<TChar>(Markup::ATTR_MID) << attr.second
+          << MarkupTable<TChar>(Markup::ATTR_END);
+   }
+   if (e.content.empty() && e.children.empty()) {
+      return out << MarkupTable<TChar>(Markup::SINGLE_TAG_END);
+   }
+   out << MarkupTable<TChar>(Markup::OPENING_TAG_END);
+   out << InsertEntityRef(e.content);
+   for (const auto &pchild : e.children) {
+      out << *pchild;
+   }
+   out << MarkupTable<TChar>(Markup::CLOSING_TAG_START) << e.name << MarkupTable<TChar>(Markup::CLOSING_TAG_END);
+   return out;
+}
 
 // Builds the element tree and returns pointer to its root. Declaration token must be removed from
 // 'tokens' prior to calling this function. Ignores the rest after the root element has been closed.
@@ -447,6 +524,16 @@ public:
    {
       return pdata_->name;
    }
+   // Set name that (optionally) includes namespace
+   void SetName(const char_t *name)
+   {
+      pdata_->name = name;
+   }
+   // Set namespace and name
+   void SetName(std::basic_string<char_t> ns, std::basic_string<char_t> name)
+   {
+      pdata_->name = std::move(ns) + ":" + std::move(name);
+   }
    // Namespace name or empty.
    std::basic_string<char_t> GetNamePrefix() const
    {
@@ -465,10 +552,16 @@ public:
       }
       return pdata_->name;
    }
+
    const std::basic_string<char_t> &GetContent() const noexcept
    {
       return pdata_->content;
    }
+   void SetContent(const char_t *content)
+   {
+      pdata_->content = content;
+   }
+
    const std::basic_string<char_t> &GetAttributeValue(const std::basic_string<char_t> &attribute) const
    {
       auto it = pdata_->attrs.find(attribute);
@@ -485,6 +578,12 @@ public:
    {
       return GetAttr(index).second;
    }
+   // Changes value of an existing attribute if 'name' is already in the list of attributes
+   void AddAttribute(std::basic_string<char_t> name, std::basic_string<char_t> value)
+   {
+      pdata_->attrs[std::move(name)] = std::move(value);
+   }
+
    std::size_t GetAttributeCount() const noexcept
    {
       return pdata_->attrs.size();
@@ -493,8 +592,9 @@ public:
    {
       return pdata_->children.size();
    }
+
    // Creates wrapper for a child element and returns it.
-   Element<char_t> GetChild(std::size_t index) const
+   const my_t GetChild(std::size_t index) const
    {
       if (index >= pdata_->children.size()) {
          throw Exception("Child " + std::to_string(index) +
@@ -503,7 +603,7 @@ public:
       details::ElementData<char_t> *pnode = pdata_->children[index].get();
       return pnode;
    }
-   Element<char_t> GetChild(const std::basic_string<char_t> &name) const
+   const my_t GetChild(const std::basic_string<char_t> &name) const
    {
       for (auto it = pdata_->children.cbegin(); it != pdata_->children.cend(); ++it) {
          details::ElementData<char_t> *pnode = it->get();
@@ -513,6 +613,33 @@ public:
       }
       throw Exception("Child " + name + " not found");
    }
+   // Create a new child at pos. If 'pos' is larger than current children count, inserts child at the end
+   my_t AddChild(std::size_t pos, const char_t *name = nullptr)
+   {
+      auto it = pdata_->children.begin();
+      while (it != pdata_->children.end() && pos > 0) {
+         ++it;
+         --pos;
+      }
+      details::ElementData<char_t> *pchild = new details::ElementData<char_t>();
+      if (name)
+         pchild->name = name;
+
+      pdata_->children.insert(it, std::unique_ptr<details::ElementData<char_t>>(pchild));
+      return pchild;
+   }
+   // Create new child at the end
+   my_t AddChild(const char_t *name = nullptr)
+   {
+      details::ElementData<char_t> *pchild = new details::ElementData<char_t>();
+      if (name)
+         pchild->name = name;
+
+      pdata_->children.emplace_back(pchild);
+      return pchild;
+   }
+
+   friend std::basic_ostream<char_t> &operator<<(std::basic_ostream<char_t> &out, const my_t &e);
 
 private:
    const std::pair<const std::basic_string<char_t>, std::basic_string<char_t>> &GetAttr(std::size_t index) const
@@ -529,6 +656,13 @@ private:
    details::ElementData<char_t> *pdata_;
 };
 
+template <typename TChar>
+std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const Element<TChar> &e)
+{
+   out << *e.pdata_;
+   return out;
+}
+
 // Represents the whole xml document with (or without) declaration and one element tree.
 template <typename TChar>
 class Document
@@ -537,6 +671,7 @@ public:
    typedef TChar char_t;
    typedef Document my_t;
 
+   // Parse 'text'
    Document(const char_t *text, bool replace_er)
    {
       std::list<const char_t *> tokens = details::Tokenize(text);
@@ -551,8 +686,8 @@ public:
       if (*(pfirst + 1) == (char_t)'?') { // has declaration
          auto declaration = details::ExtractAttributes(pfirst, *(++tokens.begin()));
 
-         std::basic_string<char_t> *decl_attrs  = details::DeclarationAttrs<char_t>();
-         std::basic_string<char_t> *decl_data[] = {&version_, &encoding_, &standalone_};
+         const std::basic_string<char_t> *decl_attrs = details::DeclarationAttrs<char_t>();
+         std::basic_string<char_t> *decl_data[]      = {&version_, &encoding_, &standalone_};
 
          for (int i = 0; i < 3; ++i) {
             auto it = declaration.find(decl_attrs[i]);
@@ -568,6 +703,31 @@ public:
          throw Exception("Malformed xml");
       }
    }
+   std::basic_string<char_t> ToString() const
+   {
+      using details::Markup;
+      using details::MarkupTable;
+
+      std::basic_ostringstream<char_t> out;
+      if (!(version_.empty() && encoding_.empty() && standalone_.empty())) {
+         out << MarkupTable<char_t>(Markup::DECL_START);
+
+         const std::basic_string<char_t> *decl_attrs  = details::DeclarationAttrs<char_t>();
+         const std::basic_string<char_t> *decl_data[] = {&version_, &encoding_, &standalone_};
+         for (int i = 0; i < 3; ++i) {
+            if (!decl_data[i]->empty())
+               out << MarkupTable<char_t>(Markup::ATTR_START) << decl_attrs[i] << MarkupTable<char_t>(Markup::ATTR_MID)
+                   << *(decl_data[i]) << MarkupTable<char_t>(Markup::ATTR_END);
+         }
+         out << MarkupTable<char_t>(Markup::DECL_END);
+      }
+      out << *proot_;
+      return out.str();
+   }
+
+   // Create empty document with unnamed root
+   Document() : proot_(std::make_unique<details::ElementData<char_t>>())
+   {}
    Document(my_t &&) = default;
    my_t &operator=(my_t &&) = default;
 
@@ -578,15 +738,34 @@ public:
    {
       return version_;
    }
+   void SetVersion(const char_t *version)
+   {
+      version_ = version;
+   }
+
    const std::basic_string<char_t> &GetEncoding() const noexcept
    {
       return encoding_;
    }
+   void SetEncoding(const char_t *encoding)
+   {
+      encoding_ = encoding;
+   }
+
    const std::basic_string<char_t> &GetStandalone() const noexcept
    {
       return standalone_;
    }
-   Element<char_t> GetRoot() const noexcept
+   void SetStandalone(const char_t *standalone)
+   {
+      standalone_ = standalone;
+   }
+
+   const Element<char_t> GetRoot() const noexcept
+   {
+      return proot_.get();
+   }
+   Element<char_t> GetRoot() noexcept
    {
       return proot_.get();
    }
@@ -598,27 +777,34 @@ private:
    std::basic_string<char_t> standalone_;
 };
 
-// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the
-// process, set entity_references to 'false' if that is undesirable.
 template <typename TChar>
-inline std::unique_ptr<Document<TChar>> ParseString(const TChar *text, bool entity_references = true)
+inline std::unique_ptr<Document<TChar>> NewDocument()
 {
-   return std::make_unique<Document<TChar>>(text, entity_references);
+   return std::make_unique<Document<TChar>>();
 }
 
 // Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the
 // process, set entity_references to 'false' if that is undesirable.
 template <typename TChar>
-inline std::unique_ptr<Document<TChar>> ParseString(const std::basic_string<TChar> &text, bool entity_references = true)
+inline std::unique_ptr<const Document<TChar>> ParseString(const TChar *text, bool entity_references = true)
 {
-   return std::make_unique<Document<TChar>>(text.c_str(), entity_references);
+   return std::make_unique<const Document<TChar>>(text, entity_references);
+}
+
+// Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the
+// process, set entity_references to 'false' if that is undesirable.
+template <typename TChar>
+inline std::unique_ptr<const Document<TChar>> ParseString(const std::basic_string<TChar> &text,
+                                                          bool entity_references = true)
+{
+   return std::make_unique<const Document<TChar>>(text.c_str(), entity_references);
 }
 
 // Reads data from 'stream' into cache and parses it into an xml::Document. Lower performance than
 // the other overloads. Parsing entity references might slow down the process, set entity_references
 // to 'false' if that is undesirable.
 template <typename TChar>
-std::unique_ptr<Document<TChar>> ParseStream(std::basic_istream<TChar> &stream, bool entity_references = true)
+std::unique_ptr<const Document<TChar>> ParseStream(std::basic_istream<TChar> &stream, bool entity_references = true)
 {
    std::basic_string<TChar> s;
    char buf[4096];
@@ -627,7 +813,7 @@ std::unique_ptr<Document<TChar>> ParseStream(std::basic_istream<TChar> &stream, 
       s.append(buf, sizeof(buf));
    s.append(buf, stream.gcount());
 
-   return std::make_unique<Document<TChar>>(s.c_str(), entity_references);
+   return std::make_unique<const Document<TChar>>(s.c_str(), entity_references);
 }
 
 } // namespace xml
