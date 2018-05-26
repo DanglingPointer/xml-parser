@@ -1,11 +1,27 @@
+#include "xmlparser.hpp"
 #include <fstream>
 #include <iostream>
 #include <chrono>
-#include <thread>
-#include "xmlparser.hpp"
 
-const char *text =
-    R"(<?xml version="1.0" encoding="UTF-8"?>
+#define UNICODE
+
+#ifdef UNICODE
+
+typedef wchar_t char_t;
+#define STDOUT std::wcout
+#define _T(x) L##x
+
+#else
+
+typedef char char_t;
+#define STDOUT std::cout
+#define _T(x) x
+
+#endif
+
+
+
+const char_t *text = _T(R"(<?xml version="1.0" encoding="UTF-8"?>
    <items>
    <item id="0001" type="donut">
       <name>Cake</name>
@@ -27,59 +43,65 @@ const char *text =
    </item>
    <item id="0000" type="empty" />
 </items>
-)";
+)");
 
-
-template <typename TChar>
-std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml::Element<TChar> &e)
+void TestParseString(const char_t *text)
 {
-   out << "\nName: " << e.GetName() << "\nChildCount: " << e.GetChildCount() << "\nContent: " << e.GetContent()
-       << "\nAttributes: ";
-   for (std::size_t i = 0; i < e.GetAttributeCount(); ++i) {
-      out << e.GetAttributeName(i) << ":" << e.GetAttributeValue(i) << " ";
-   }
-   out << "\nName prefix: " << e.GetNamePrefix() << "\nName postfix: " << e.GetNamePostfix() << "\n{\n";
-   for (std::size_t i = 0; i < e.GetChildCount(); ++i) {
-      out << e.GetChild(i) << std::endl;
-   }
-   return out << "} // " << e.GetName() << "\n";
+   auto doc = xml::ParseString(text);
+   STDOUT << doc->ToString() << std::endl;
+
+   auto root = doc->GetRoot();
+   STDOUT << root.GetName() << std::endl;
 }
 
-template <typename TChar>
-std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml::Document<TChar> &doc)
+void TestNewDocument()
 {
-   out << "Encoding = " << doc.GetEncoding() << ", Version = " << doc.GetVersion()
-       << ", Standalone = " << doc.GetStandalone() << std::endl;
-   return out << doc.GetRoot() << std::endl;
+   auto doc  = xml::NewDocument(_T("root"), _T("1.0"), _T("UTF-8"), _T("yes"));
+   auto root = doc->GetRoot();
+   root.AddAttribute(_T("attr1"), _T("vaLue1"));
+   root.AddAttribute(_T("attr2"), _T("value2"));
+   auto child1 = root.AddChild(_T("child"));
+   child1.SetContent(_T("Content 3 goes here"));
+   auto child2 = root.AddChild(0, _T("child"));
+   child2.SetContent(_T("Content 1 goes here"));
+   auto child3 = root.AddChild(1, _T("child"));
+   child3.SetContent(_T("Content 2 goes here"));
+   child3.AddAttribute(_T("last"), _T("False"));
+   auto child4 = root.AddChild(_T("last"));
+   child4.AddAttribute(_T("last"), _T("True"));
+   STDOUT << doc->ToString() << std::endl;
+
+   root.SetContent(_T("illegal content")); // should throw
 }
+
+void TestParseFile(char *filename)
+{
+   std::basic_ifstream<char_t> file(filename);
+   auto doc = xml::ParseStream(file, true);
+   STDOUT << doc->ToString() << std::endl;
+}
+
+
 
 int main(int argc, char *argv[])
 {
    using namespace std::chrono_literals;
-   std::unique_ptr<const xml::Document<char>> doc;
+
+   auto start = std::chrono::system_clock::now();
    try {
-      auto start = std::chrono::system_clock::now();
+      if (argc > 1)
+         TestParseFile(argv[1]);
 
-      for (int i = 0; i < 1; ++i) {
-         if (argc > 1) {
-            std::ifstream file(argv[1]);
-            doc = xml::ParseStream(file, true);
-         }
-         else {
-            doc = xml::ParseString(text);
-         }
-         std::this_thread::sleep_for(1ms);
-         std::cout << doc->GetRoot().GetChildCount() << std::endl;
-         std::cout << doc->ToString() << std::endl;
-      }
+      TestParseString(text);
 
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
-      std::cout << "\nTime: " << elapsed.count() << "ms (including reading file)\n";
+      TestNewDocument();
    }
    catch (const xml::Exception &e) {
-      std::cout << e.what() << std::endl;
+      STDOUT << e.what() << std::endl;
    }
 
+   auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
+   STDOUT << _T("\nTime: ") << elapsed.count() << _T("ms (including reading file)\n");
 
    return 0;
 }

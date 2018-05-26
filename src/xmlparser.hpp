@@ -499,8 +499,8 @@ public:
    }
 };
 
-// Wrapper containing pointer to a node in the element tree, and defining user interface functions
-// to access the parsed data. Move is a shallow copy, deep copy unavailable.
+// Thin wrapper containing pointer to a node in the element tree, and defining user interface
+// functions to access and modify data. Has no ownership of the underlying node.
 template <typename TChar>
 class Element
 {
@@ -514,20 +514,15 @@ public:
          throw Exception("Failed to create element");
       }
    }
-   Element(my_t &&) = default;
-   my_t &operator=(my_t &&) = default;
-
-   Element(const my_t &) = delete;
-   my_t &operator=(const my_t &) = delete;
 
    const std::basic_string<char_t> &GetName() const noexcept
    {
       return pdata_->name;
    }
    // Set name that (optionally) includes namespace
-   void SetName(const char_t *name)
+   void SetName(std::basic_string<char_t> name)
    {
-      pdata_->name = name;
+      pdata_->name = std::move(name);
    }
    // Set namespace and name
    void SetName(std::basic_string<char_t> ns, std::basic_string<char_t> name)
@@ -557,9 +552,11 @@ public:
    {
       return pdata_->content;
    }
-   void SetContent(const char_t *content)
+   void SetContent(std::basic_string<char_t> content)
    {
-      pdata_->content = content;
+      if (GetChildCount() != 0)
+         throw Exception("Cannot have both content and children");
+      pdata_->content = std::move(content);
    }
 
    const std::basic_string<char_t> &GetAttributeValue(const std::basic_string<char_t> &attribute) const
@@ -616,6 +613,9 @@ public:
    // Create a new child at pos. If 'pos' is larger than current children count, inserts child at the end
    my_t AddChild(std::size_t pos, const char_t *name = nullptr)
    {
+      if (!pdata_->content.empty())
+         throw Exception("Cannot have both content and children");
+
       auto it = pdata_->children.begin();
       while (it != pdata_->children.end() && pos > 0) {
          ++it;
@@ -631,6 +631,9 @@ public:
    // Create new child at the end
    my_t AddChild(const char_t *name = nullptr)
    {
+      if (!pdata_->content.empty())
+         throw Exception("Cannot have both content and children");
+
       details::ElementData<char_t> *pchild = new details::ElementData<char_t>();
       if (name)
          pchild->name = name;
@@ -703,6 +706,22 @@ public:
          throw Exception("Malformed xml");
       }
    }
+   // Create new empty document
+   Document(std::basic_string<char_t> root_name, std::basic_string<char_t> version, std::basic_string<char_t> encoding,
+            std::basic_string<char_t> standalone)
+       : proot_(std::make_unique<details::ElementData<char_t>>()), version_(std::move(version)),
+         encoding_(std::move(encoding)), standalone_(std::move(standalone))
+   {
+      proot_->name = std::move(root_name);
+   }
+
+   Document(my_t &&) = default;
+   my_t &operator=(my_t &&) = default;
+
+   Document(const my_t &) = delete;
+   my_t &operator=(const my_t &) = delete;
+
+   // Serialize to xml
    std::basic_string<char_t> ToString() const
    {
       using details::Markup;
@@ -724,15 +743,6 @@ public:
       out << *proot_;
       return out.str();
    }
-
-   // Create empty document with unnamed root
-   Document() : proot_(std::make_unique<details::ElementData<char_t>>())
-   {}
-   Document(my_t &&) = default;
-   my_t &operator=(my_t &&) = default;
-
-   Document(const my_t &) = delete;
-   my_t &operator=(const my_t &) = delete;
 
    const std::basic_string<char_t> &GetVersion() const noexcept
    {
@@ -777,10 +787,20 @@ private:
    std::basic_string<char_t> standalone_;
 };
 
+// New blank document without header
 template <typename TChar>
-inline std::unique_ptr<Document<TChar>> NewDocument()
+inline std::unique_ptr<Document<TChar>> NewDocument(const TChar *root_name)
 {
-   return std::make_unique<Document<TChar>>();
+   return std::make_unique<Document<TChar>>(root_name, std::basic_string<TChar>(), std::basic_string<TChar>(),
+                                            std::basic_string<TChar>());
+}
+
+// New blank document with header
+template <typename TChar>
+inline std::unique_ptr<Document<TChar>> NewDocument(const TChar *root_name, const TChar *version, const TChar *encoding,
+                                                    const TChar *standalone)
+{
+   return std::make_unique<Document<TChar>>(root_name, version, encoding, standalone);
 }
 
 // Creates xml::Document that reads and parses 'text'. Parsing entity references might slow down the
@@ -806,11 +826,12 @@ inline std::unique_ptr<const Document<TChar>> ParseString(const std::basic_strin
 template <typename TChar>
 std::unique_ptr<const Document<TChar>> ParseStream(std::basic_istream<TChar> &stream, bool entity_references = true)
 {
+   constexpr std::size_t SIZE = 4096;
    std::basic_string<TChar> s;
-   char buf[4096];
+   TChar buf[SIZE];
 
-   while (stream.read(buf, sizeof(buf)))
-      s.append(buf, sizeof(buf));
+   while (stream.read(buf, SIZE))
+      s.append(buf, SIZE);
    s.append(buf, stream.gcount());
 
    return std::make_unique<const Document<TChar>>(s.c_str(), entity_references);

@@ -1,9 +1,9 @@
 #
 # Compiler flags
 #
-CXX    = g++
+CXX    = clang++
 CXXFLAGS = -Wall -Wextra -std=c++14
-LDFLAGS = -pthread
+#LDFLAGS = -pthread
 
 #
 # Project files
