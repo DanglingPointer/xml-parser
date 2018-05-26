@@ -23,7 +23,7 @@ const char *text =
       <topping id="5006">Chocolate</topping>
       <!--<topping></topping> -->
       <!-- blablabal-->
-      <nm:topping nm:id="5007">Maple&amp;Apple</topping>
+      <nm:topping nm:id="5007">Maple&amp;Apple</nm:topping>
    </item>
    <item id="0000" type="empty" />
 </items>
@@ -56,11 +56,11 @@ std::basic_ostream<TChar> &operator<<(std::basic_ostream<TChar> &out, const xml:
 int main(int argc, char *argv[])
 {
    using namespace std::chrono_literals;
-   std::unique_ptr<xml::Document<char>> doc;
+   std::unique_ptr<const xml::Document<char>> doc;
    try {
       auto start = std::chrono::system_clock::now();
 
-      for (int i = 0; i < 1000; ++i) {
+      for (int i = 0; i < 1; ++i) {
          if (argc > 1) {
             std::ifstream file(argv[1]);
             doc = xml::ParseStream(file, true);
@@ -70,6 +70,7 @@ int main(int argc, char *argv[])
          }
          std::this_thread::sleep_for(1ms);
          std::cout << doc->GetRoot().GetChildCount() << std::endl;
+         std::cout << doc->ToString() << std::endl;
       }
 
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
