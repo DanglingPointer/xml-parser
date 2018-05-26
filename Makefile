@@ -3,6 +3,7 @@
 #
 CXX    = g++
 CXXFLAGS = -Wall -Wextra -std=c++14
+LDFLAGS = -pthread
 
 #
 # Project files
@@ -39,7 +40,7 @@ all: prep release
 debug: $(DBGEXE)
 
 $(DBGEXE): $(DBGOBJS)
-	$(CXX) $(CXXFLAGS) $(DBGCXXFLAGS) -o $(DBGEXE) $^
+	$(CXX) -o $(DBGEXE) $^ $(LDFLAGS)
 
 $(DBGDIR)/%.o: $(SRCDIR)/%.cpp
 	$(CXX) -c $(CXXFLAGS) $(DBGCXXFLAGS) -o $@ $<
@@ -47,10 +48,11 @@ $(DBGDIR)/%.o: $(SRCDIR)/%.cpp
 #
 # Release rules
 #
+
 release: $(RELEXE)
 
 $(RELEXE): $(RELOBJS)
-	$(CXX) $(CXXFLAGS) $(RELCXXFLAGS) -o $(RELEXE) $^
+	$(CXX) -o $(RELEXE) $^ $(LDFLAGS)
 
 $(RELDIR)/%.o: $(SRCDIR)/%.cpp
 	$(CXX) -c $(CXXFLAGS) $(RELCXXFLAGS) -o $@ $<
