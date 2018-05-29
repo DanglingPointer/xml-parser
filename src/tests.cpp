@@ -45,13 +45,16 @@ const char_t *text = _T(R"(<?xml version="1.0" encoding="UTF-8"?>
 </items>
 )");
 
-void TestParseString(const char_t *text)
+void TestParseStringAndCopy(const char_t *text)
 {
    auto doc = xml::ParseString(text);
    STDOUT << doc->ToString() << std::endl;
 
    auto root = doc->GetRoot();
    STDOUT << root.GetName() << std::endl;
+
+   auto doc_copy = doc->Copy();
+   STDOUT << doc->ToString() << std::endl;
 }
 
 void TestNewDocument()
@@ -82,7 +85,6 @@ void TestParseFile(char *filename)
 }
 
 
-
 int main(int argc, char *argv[])
 {
    using namespace std::chrono_literals;
@@ -92,7 +94,7 @@ int main(int argc, char *argv[])
       if (argc > 1)
          TestParseFile(argv[1]);
 
-      TestParseString(text);
+      TestParseStringAndCopy(text);
 
       TestNewDocument();
    }

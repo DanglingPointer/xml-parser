@@ -400,11 +400,27 @@ template <typename TChar>
 struct ElementData
 {
    typedef TChar char_t;
+   typedef std::basic_string<char_t> string_t;
+   typedef ElementData<char_t> my_t;
 
-   std::vector<std::unique_ptr<ElementData>> children;
-   std::unordered_map<std::basic_string<char_t>, std::basic_string<char_t>> attrs;
-   std::basic_string<char_t> name;
-   std::basic_string<char_t> content;
+   ElementData() = default;
+   ElementData(string_t name, string_t content, std::unordered_map<string_t, string_t> attrs)
+       : name(name), content(content), attrs(attrs)
+   {}
+   std::unique_ptr<my_t> Copy() const
+   {
+      auto pcopy = std::make_unique<my_t>(name, content, attrs);
+      for (const auto &pchild : children) {
+         auto pchild_copy = pchild->Copy();
+         pcopy->children.emplace_back(std::move(pchild_copy));
+      }
+      return std::move(pcopy);
+   }
+
+   string_t name;
+   string_t content;
+   std::unordered_map<string_t, string_t> attrs;
+   std::vector<std::unique_ptr<my_t>> children;
 };
 
 template <typename TChar>
@@ -672,7 +688,7 @@ class Document
 {
 public:
    typedef TChar char_t;
-   typedef Document my_t;
+   typedef Document<char_t> my_t;
 
    // Parse 'text'
    Document(const char_t *text, bool replace_er)
@@ -721,6 +737,14 @@ public:
    Document(const my_t &) = delete;
    my_t &operator=(const my_t &) = delete;
 
+   // Create a deep non-const copy of the document
+   std::unique_ptr<my_t> Copy() const
+   {
+      auto pcopy     = std::make_unique<my_t>(std::basic_string<char_t>(), version_, encoding_, standalone_);
+      auto root_copy = proot_->Copy();
+      pcopy->proot_  = std::move(root_copy);
+      return pcopy;
+   }
    // Serialize to xml
    std::basic_string<char_t> ToString() const
    {
