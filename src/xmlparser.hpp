@@ -404,7 +404,7 @@ struct ElementData
    typedef ElementData<char_t> my_t;
 
    ElementData() = default;
-   ElementData(string_t name, string_t content, std::unordered_map<string_t, string_t> attrs)
+   ElementData(const string_t &name, const string_t &content, const std::unordered_map<string_t, string_t> &attrs)
        : name(name), content(content), attrs(attrs)
    {}
    std::unique_ptr<my_t> Copy() const
